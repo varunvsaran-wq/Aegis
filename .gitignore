@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Experiment tracking
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Data & models (regenerated locally; keep data/.gitkeep tracked)
+data/*
+!data/.gitkeep
+models_cache/
+
+# Secrets
+.env
+
+# Handoff docs
+HANDOFF(1).md
+HANDOFF.md

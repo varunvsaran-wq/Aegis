@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aegis-rag"
+version = "0.1.0"
+description = "Aegis: a model-agnostic RAG reliability harness"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "litellm",
+    "pydantic>=2",
+    "typer",
+    "rich",
+    "numpy",
+    "pandas",
+    "scipy",
+    "statsmodels",
+    "mlflow",
+    "matplotlib",
+    "datasets",
+    "rank-bm25",
+    "qdrant-client",
+    "sentence-transformers",
+    "torch",
+    "pyyaml",
+    "tenacity",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
+
+[project.scripts]
+aegis = "aegis.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["aegis"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
