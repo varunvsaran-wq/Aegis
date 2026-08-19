@@ -76,6 +76,12 @@ def eval_cmd(
     judge_model: str = typer.Option(None, "--judge-model"),
     experiment: str = typer.Option("aegis-phase1", "--experiment"),
     split: str = typer.Option("validation", "--split"),
+    k_vote: int = typer.Option(1, "--k-vote", help="Self-consistency votes (harnessed)."),
+    vote_temperature: float = typer.Option(0.7, "--vote-temperature"),
+    use_structurer: bool = typer.Option(
+        True, "--use-structurer/--no-use-structurer"
+    ),
+    use_verifier: bool = typer.Option(True, "--use-verifier/--no-use-verifier"),
 ) -> None:
     """Run one evaluation (per seed) and log it to MLflow."""
     from aegis.eval.run import run_eval
@@ -94,6 +100,10 @@ def eval_cmd(
             judge_model=judge_model,
             experiment=experiment,
             split=split,
+            k_vote=k_vote,
+            vote_temperature=vote_temperature,
+            use_structurer=use_structurer,
+            use_verifier=use_verifier,
         )
         rows.append({"seed": s, "run_id": out["run_id"], "metrics": out["metrics"]})
 
@@ -108,7 +118,10 @@ def eval_cmd(
     _print_repro(
         f"aegis eval --model {model} --benchmark {benchmark} --n {n} {seeds_arg} "
         f"--mode {mode} --temperature {temperature} --k-final {k_final}"
-        f"{judge_arg} --experiment {experiment} --split {split}"
+        f"{judge_arg} --experiment {experiment} --split {split} "
+        f"--k-vote {k_vote} --vote-temperature {vote_temperature} "
+        f"{'--use-structurer' if use_structurer else '--no-use-structurer'} "
+        f"{'--use-verifier' if use_verifier else '--no-use-verifier'}"
     )
 
 
@@ -116,7 +129,9 @@ def eval_cmd(
 def sweep_cmd(
     models: str = typer.Option("mock", "--models", help="Comma-separated models."),
     modes: str = typer.Option(
-        "closed_book,vanilla_rag,raw_rag", "--modes", help="Comma-separated modes."
+        "closed_book,vanilla_rag,raw_rag,harnessed",
+        "--modes",
+        help="Comma-separated modes.",
     ),
     seeds: str = typer.Option("0,1,2", "--seeds", help="Comma-separated seeds."),
     n: int = typer.Option(300, "--n"),
@@ -126,6 +141,12 @@ def sweep_cmd(
     judge_model: str = typer.Option(None, "--judge-model"),
     experiment: str = typer.Option("aegis-phase1", "--experiment"),
     split: str = typer.Option("validation", "--split"),
+    k_vote: int = typer.Option(1, "--k-vote", help="Self-consistency votes (harnessed)."),
+    vote_temperature: float = typer.Option(0.7, "--vote-temperature"),
+    use_structurer: bool = typer.Option(
+        True, "--use-structurer/--no-use-structurer"
+    ),
+    use_verifier: bool = typer.Option(True, "--use-verifier/--no-use-verifier"),
 ) -> None:
     """Run the full models x modes x seeds grid."""
     from aegis.eval.run import run_sweep
@@ -145,6 +166,10 @@ def sweep_cmd(
         judge_model=judge_model,
         experiment=experiment,
         split=split,
+        k_vote=k_vote,
+        vote_temperature=vote_temperature,
+        use_structurer=use_structurer,
+        use_verifier=use_verifier,
     )
 
     judge_arg = f" --judge-model {judge_model}" if judge_model else ""
@@ -152,7 +177,10 @@ def sweep_cmd(
         f"aegis sweep --models {','.join(model_list)} --modes {','.join(mode_list)} "
         f"--seeds {','.join(str(s) for s in seed_list)} --n {n} "
         f"--benchmark {benchmark} --temperature {temperature} --k-final {k_final}"
-        f"{judge_arg} --experiment {experiment} --split {split}"
+        f"{judge_arg} --experiment {experiment} --split {split} "
+        f"--k-vote {k_vote} --vote-temperature {vote_temperature} "
+        f"{'--use-structurer' if use_structurer else '--no-use-structurer'} "
+        f"{'--use-verifier' if use_verifier else '--no-use-verifier'}"
     )
 
 
@@ -196,6 +224,210 @@ def export_cmd(
     for p in paths:
         console.print(f"  [bold]{p.resolve()}[/bold]")
     _print_repro(f"aegis export --experiment {experiment}")
+
+
+@app.command("compare")
+def compare_cmd(
+    experiment: str = typer.Option("aegis-phase2", "--experiment"),
+    model: str = typer.Option(..., "--model", help="Model alias to compare."),
+    mode_a: str = typer.Option("raw_rag", "--mode-a"),
+    mode_b: str = typer.Option("harnessed", "--mode-b"),
+) -> None:
+    """Paired per-question significance of mode_b vs mode_a for one model."""
+    from aegis.eval.export import compare_modes
+
+    try:
+        out = compare_modes(experiment, model, mode_a=mode_a, mode_b=mode_b)
+    except RuntimeError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+    table = Table(
+        title=(
+            f"aegis compare — {out['model']}: {out['mode_a']} vs {out['mode_b']} "
+            f"(n={out['n_pairs']} paired questions)"
+        )
+    )
+    table.add_column("metric")
+    table.add_column(out["mode_a"], justify="right")
+    table.add_column(out["mode_b"], justify="right")
+    table.add_column("delta", justify="right")
+    table.add_column("95% CI", justify="right")
+    table.add_column("p-value", justify="right")
+    table.add_row(
+        "EM",
+        f"{out['em_a']:.3f}",
+        f"{out['em_b']:.3f}",
+        f"{out['em_delta']:+.3f}",
+        f"[{out['em_ci'][0]:+.3f}, {out['em_ci'][1]:+.3f}]",
+        f"{out['mcnemar_p']:.4g} (McNemar)",
+    )
+    table.add_row(
+        "F1",
+        f"{out['f1_a']:.3f}",
+        f"{out['f1_b']:.3f}",
+        f"{out['f1_delta']:+.3f}",
+        f"[{out['f1_ci'][0]:+.3f}, {out['f1_ci'][1]:+.3f}]",
+        f"{out['wilcoxon_p']:.4g} (Wilcoxon)",
+    )
+    console.print(table)
+    _print_repro(
+        f"aegis compare --experiment {experiment} --model {model} "
+        f"--mode-a {mode_a} --mode-b {mode_b}"
+    )
+
+
+@app.command("export2")
+def export2_cmd(
+    experiment: str = typer.Option("aegis-phase2", "--experiment"),
+) -> None:
+    """Export the Phase 2 Pareto figure, results table, and significance table."""
+    from aegis.eval.export import export_phase2, export_phase2_significance
+
+    try:
+        paths = export_phase2(experiment=experiment)
+    except RuntimeError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+    try:
+        paths.append(export_phase2_significance(experiment=experiment))
+    except Exception as exc:
+        console.print(
+            f"[yellow]Warning:[/yellow] skipping significance table: {exc}"
+        )
+
+    console.print("Wrote:")
+    for p in paths:
+        console.print(f"  [bold]{p.resolve()}[/bold]")
+    _print_repro(f"aegis export2 --experiment {experiment}")
+
+
+@app.command("inject")
+def inject_cmd(
+    models: str = typer.Option("mock", "--models", help="Comma-separated models."),
+    seeds: str = typer.Option("0,1,2", "--seeds"),
+    n: int = typer.Option(300, "--n"),
+    poison_rate: float = typer.Option(0.1, "--poison-rate"),
+    k_final: int = typer.Option(5, "--k-final"),
+    judge_model: str = typer.Option(None, "--judge-model"),
+    experiment: str = typer.Option("aegis-phase3", "--experiment"),
+    split: str = typer.Option("validation", "--split"),
+) -> None:
+    """Phase 3: run the injection experiment (raw vs harnessed on poisoned corpus).
+
+    Runs ``raw_rag`` (undefended) and ``harnessed`` (defended) over the poisoned
+    HotpotQA corpus for every model x seed, logging attack-success-rate metrics.
+    """
+    from aegis.eval.run import run_sweep
+
+    run_sweep(
+        models=_parse_csv(models),
+        modes=["raw_rag", "harnessed"],
+        seeds=_parse_seeds(seeds),
+        n=n,
+        benchmark="hotpotqa",
+        k_final=k_final,
+        judge_model=judge_model,
+        experiment=experiment,
+        split=split,
+        poison=True,
+        poison_rate=poison_rate,
+        use_defense=True,
+    )
+    _print_repro(
+        f"aegis inject --models {models} --seeds {seeds} --n {n} "
+        f"--poison-rate {poison_rate} --experiment {experiment}"
+    )
+
+
+@app.command("ablate")
+def ablate_cmd(
+    model: str = typer.Option(..., "--model", help="Model alias or litellm string."),
+    seeds: str = typer.Option("0,1,2", "--seeds"),
+    n: int = typer.Option(300, "--n"),
+    ablations: str = typer.Option(
+        "full,no_structurer,no_verifier,no_reranker", "--ablations"
+    ),
+    k_final: int = typer.Option(5, "--k-final"),
+    judge_model: str = typer.Option(None, "--judge-model"),
+    experiment: str = typer.Option("aegis-phase4", "--experiment"),
+    split: str = typer.Option("validation", "--split"),
+) -> None:
+    """Phase 4: run the component ablation study (full + one-component removals)."""
+    from aegis.eval.run import run_ablation
+
+    run_ablation(
+        model=model,
+        seeds=_parse_seeds(seeds),
+        n=n,
+        ablations=_parse_csv(ablations),
+        experiment=experiment,
+        benchmark="hotpotqa",
+        k_final=k_final,
+        judge_model=judge_model,
+        split=split,
+    )
+    _print_repro(
+        f"aegis ablate --model {model} --seeds {seeds} --n {n} "
+        f"--ablations {ablations} --experiment {experiment}"
+    )
+
+
+@app.command("export3")
+def export3_cmd(
+    experiment: str = typer.Option("aegis-phase3", "--experiment"),
+) -> None:
+    """Export the Phase 3 injection table and per-category ASR figure."""
+    from aegis.eval.export import export_phase3
+
+    try:
+        paths = export_phase3(experiment=experiment)
+    except RuntimeError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1)
+    console.print("Wrote:")
+    for p in paths:
+        console.print(f"  [bold]{p.resolve()}[/bold]")
+    _print_repro(f"aegis export3 --experiment {experiment}")
+
+
+@app.command("export4")
+def export4_cmd(
+    experiment: str = typer.Option("aegis-phase4", "--experiment"),
+    model: str = typer.Option(None, "--model", help="Model to tabulate (default: first)."),
+) -> None:
+    """Export the Phase 4 component-ablation table."""
+    from aegis.eval.export import export_phase4_ablation
+
+    try:
+        path = export_phase4_ablation(experiment=experiment, model=model)
+    except RuntimeError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(code=1)
+    console.print(f"Wrote:\n  [bold]{path.resolve()}[/bold]")
+    _print_repro(f"aegis export4 --experiment {experiment}")
+
+
+@app.command("serve")
+def serve_cmd(
+    demo: bool = typer.Option(False, "--demo", help="Launch the Gradio demo."),
+    api: bool = typer.Option(False, "--api", help="Launch the FastAPI server."),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8000, "--port"),
+) -> None:
+    """Serve Aegis: the Gradio demo (--demo) or the FastAPI API (--api)."""
+    if demo == api:
+        console.print("[red]Error:[/red] pass exactly one of --demo or --api.")
+        raise typer.Exit(code=1)
+    if demo:
+        from aegis.serve.demo import build_demo
+
+        build_demo().launch(server_name=host, server_port=port)
+    else:
+        import uvicorn
+
+        uvicorn.run("aegis.serve.api:app", host=host, port=port)
 
 
 @app.command("models")

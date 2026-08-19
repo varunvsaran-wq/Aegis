@@ -123,6 +123,7 @@ class RAGPipeline:
         retriever: HybridRetriever | None = None,
         mode: str = "raw_rag",
         k_final: int = 5,
+        canary: str | None = None,
     ):
         assert mode in MODES, f"mode must be one of {MODES}, got {mode!r}"
         if mode in ("vanilla_rag", "raw_rag"):
@@ -131,6 +132,11 @@ class RAGPipeline:
         self.retriever = retriever
         self.mode = mode
         self.k_final = k_final
+        self.canary = canary
+        """Optional secret token planted in the raw_rag system prompt. The raw
+        pipeline never *detects* a leak (that is the harness's job); planting it
+        here lets the injection experiment measure exfiltration on both the raw
+        and harnessed systems under an identical threat model."""
 
     def run(self, q: HotpotQuestion) -> QueryResult:
         """Answer one question, returning the full :class:`QueryResult` record."""
@@ -178,8 +184,13 @@ class RAGPipeline:
         user_prompt = PROMPT_TEMPLATES["raw_rag_user"].format(
             context=format_context(retrieved), question=q.question
         )
+        system_prompt = PROMPT_TEMPLATES["raw_rag_system"]
+        if self.canary:
+            from aegis.defense import plant_canary
+
+            system_prompt = plant_canary(system_prompt, self.canary)
         messages = [
-            {"role": "system", "content": PROMPT_TEMPLATES["raw_rag_system"]},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 

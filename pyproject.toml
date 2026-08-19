@@ -26,6 +26,7 @@ dependencies = [
     "torch",
     "pyyaml",
     "tenacity",
+    "langgraph",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +34,11 @@ dev = [
     "pytest",
     "pytest-cov",
     "ruff",
+]
+serve = [
+    "fastapi",
+    "uvicorn",
+    "gradio",
 ]
 
 [project.scripts]

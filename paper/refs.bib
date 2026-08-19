@@ -1,0 +1,206 @@
+% =====================================================================
+% refs.bib  --  Bibliography for the Aegis paper.
+%
+% Entries are collected as Related Work is written (per HANDOFF 4B),
+% not reconstructed at the end. Keys are stable; cite with \citep / \citet.
+% Details (authors, venue, year) are transcribed from the primary sources;
+% arXiv ids are given only where confidently known.
+% =====================================================================
+
+% ---------------------------------------------------------------------
+% Benchmarks and datasets
+% ---------------------------------------------------------------------
+
+@inproceedings{yang2018hotpotqa,
+  title     = {{HotpotQA}: A Dataset for Diverse, Explainable Multi-hop Question Answering},
+  author    = {Yang, Zhilin and Qi, Peng and Zhang, Saizheng and Bengio, Yoshua and
+               Cohen, William W. and Salakhutdinov, Ruslan and Manning, Christopher D.},
+  booktitle = {Proceedings of the 2018 Conference on Empirical Methods in Natural
+               Language Processing (EMNLP)},
+  pages     = {2369--2380},
+  year      = {2018},
+  address   = {Brussels, Belgium},
+  publisher = {Association for Computational Linguistics}
+}
+
+@inproceedings{yang2024crag,
+  title     = {{CRAG} -- Comprehensive {RAG} Benchmark},
+  author    = {Yang, Xiao and Sun, Kai and Xin, Hao and Sun, Yushi and Bhalla, Nikita and
+               Chen, Xiangsen and Chaudhary, Sajal and Liu, Xing Han and Ahn, Aaron and
+               Sun, Zhaojiang and Xu, Yifan and others},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS) Datasets and
+               Benchmarks Track},
+  year      = {2024},
+  note      = {arXiv:2406.04744}
+}
+
+@article{trivedi2022musique,
+  title   = {{MuSiQue}: Multihop Questions via Single-hop Question Composition},
+  author  = {Trivedi, Harsh and Balasubramanian, Niranjan and Khot, Tushar and
+             Sabharwal, Ashish},
+  journal = {Transactions of the Association for Computational Linguistics (TACL)},
+  volume  = {10},
+  pages   = {539--554},
+  year    = {2022}
+}
+
+% ---------------------------------------------------------------------
+% Retrieval, fusion, reranking, embeddings
+% ---------------------------------------------------------------------
+
+@article{robertson2009bm25,
+  title     = {The Probabilistic Relevance Framework: {BM25} and Beyond},
+  author    = {Robertson, Stephen and Zaragoza, Hugo},
+  journal   = {Foundations and Trends in Information Retrieval},
+  volume    = {3},
+  number    = {4},
+  pages     = {333--389},
+  year      = {2009},
+  publisher = {Now Publishers}
+}
+
+@inproceedings{cormack2009rrf,
+  title     = {Reciprocal Rank Fusion Outperforms {Condorcet} and Individual Rank
+               Learning Methods},
+  author    = {Cormack, Gordon V. and Clarke, Charles L. A. and B{\"u}ttcher, Stefan},
+  booktitle = {Proceedings of the 32nd International ACM SIGIR Conference on Research
+               and Development in Information Retrieval (SIGIR)},
+  pages     = {758--759},
+  year      = {2009}
+}
+
+@inproceedings{karpukhin2020dpr,
+  title     = {Dense Passage Retrieval for Open-Domain Question Answering},
+  author    = {Karpukhin, Vladimir and O{\u{g}}uz, Barlas and Min, Sewon and
+               Lewis, Patrick and Wu, Ledell and Edunov, Sergey and Chen, Danqi and
+               Yih, Wen-tau},
+  booktitle = {Proceedings of the 2020 Conference on Empirical Methods in Natural
+               Language Processing (EMNLP)},
+  pages     = {6769--6781},
+  year      = {2020}
+}
+
+@inproceedings{xiao2024cpack,
+  title     = {{C-Pack}: Packed Resources for General {Chinese} Embeddings},
+  author    = {Xiao, Shitao and Liu, Zheng and Zhang, Peitian and Muennighoff, Niklas and
+               Lian, Defu and Nie, Jian-Yun},
+  booktitle = {Proceedings of the 47th International ACM SIGIR Conference on Research
+               and Development in Information Retrieval (SIGIR)},
+  year      = {2024},
+  note      = {arXiv:2309.07597; BGE embedding models}
+}
+
+@inproceedings{he2021deberta,
+  title     = {{DeBERTa}: Decoding-enhanced {BERT} with Disentangled Attention},
+  author    = {He, Pengcheng and Liu, Xiaodong and Gao, Jianfeng and Chen, Weizhu},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2021},
+  note      = {arXiv:2006.03654}
+}
+
+% ---------------------------------------------------------------------
+% RAG systems and evaluation
+% ---------------------------------------------------------------------
+
+@inproceedings{lewis2020rag,
+  title     = {Retrieval-Augmented Generation for Knowledge-Intensive {NLP} Tasks},
+  author    = {Lewis, Patrick and Perez, Ethan and Piktus, Aleksandra and Petroni, Fabio and
+               Karpukhin, Vladimir and Goyal, Naman and K{\"u}ttler, Heinrich and
+               Lewis, Mike and Yih, Wen-tau and Rockt{\"a}schel, Tim and
+               Riedel, Sebastian and Kiela, Douwe},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  volume    = {33},
+  pages     = {9459--9474},
+  year      = {2020}
+}
+
+@inproceedings{es2024ragas,
+  title     = {{RAGAS}: Automated Evaluation of Retrieval Augmented Generation},
+  author    = {Es, Shahul and James, Jithin and Espinosa-Anke, Luis and Schockaert, Steven},
+  booktitle = {Proceedings of the 18th Conference of the European Chapter of the
+               Association for Computational Linguistics (EACL): System Demonstrations},
+  year      = {2024},
+  note      = {arXiv:2309.15217}
+}
+
+% ---------------------------------------------------------------------
+% Consistency and reasoning
+% ---------------------------------------------------------------------
+
+@inproceedings{wang2023selfconsistency,
+  title     = {Self-Consistency Improves Chain of Thought Reasoning in Language Models},
+  author    = {Wang, Xuezhi and Wei, Jason and Schuurmans, Dale and Le, Quoc V. and
+               Chi, Ed H. and Narang, Sharan and Chowdhery, Aakanksha and Zhou, Denny},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2023},
+  note      = {arXiv:2203.11171}
+}
+
+% ---------------------------------------------------------------------
+% Prompt injection: attacks and defenses
+% ---------------------------------------------------------------------
+
+@article{hines2024spotlighting,
+  title   = {Defending Against Indirect Prompt Injection Attacks With Spotlighting},
+  author  = {Hines, Keegan and Lopez, Gary and Hall, Matthew and Zarfati, Federico and
+             Zunger, Yonatan and Kiciman, Emre},
+  journal = {arXiv preprint arXiv:2403.14720},
+  year    = {2024}
+}
+
+@article{wallace2024instructionhierarchy,
+  title   = {The Instruction Hierarchy: Training {LLMs} to Prioritize Privileged
+             Instructions},
+  author  = {Wallace, Eric and Xiao, Kai and Leike, Reimar and Weng, Lilian and
+             Heidecke, Johannes and Beutel, Alex},
+  journal = {arXiv preprint arXiv:2404.13208},
+  year    = {2024}
+}
+
+@inproceedings{greshake2023injection,
+  title     = {Not What You've Signed Up For: Compromising Real-World {LLM}-Integrated
+               Applications with Indirect Prompt Injection},
+  author    = {Greshake, Kai and Abdelnabi, Sahar and Mishra, Shailesh and Endres, Christoph and
+               Holz, Thorsten and Fritz, Mario},
+  booktitle = {Proceedings of the 16th ACM Workshop on Artificial Intelligence and
+               Security (AISec@CCS)},
+  pages     = {79--90},
+  year      = {2023},
+  note      = {arXiv:2302.12173}
+}
+
+% ---------------------------------------------------------------------
+% Statistics
+% ---------------------------------------------------------------------
+
+@article{benjamini1995fdr,
+  title     = {Controlling the False Discovery Rate: A Practical and Powerful Approach
+               to Multiple Testing},
+  author    = {Benjamini, Yoav and Hochberg, Yosef},
+  journal   = {Journal of the Royal Statistical Society: Series B (Methodological)},
+  volume    = {57},
+  number    = {1},
+  pages     = {289--300},
+  year      = {1995}
+}
+
+@article{mcnemar1947,
+  title     = {Note on the Sampling Error of the Difference Between Correlated
+               Proportions or Percentages},
+  author    = {McNemar, Quinn},
+  journal   = {Psychometrika},
+  volume    = {12},
+  number    = {2},
+  pages     = {153--157},
+  year      = {1947}
+}
+
+@article{wilcoxon1945,
+  title     = {Individual Comparisons by Ranking Methods},
+  author    = {Wilcoxon, Frank},
+  journal   = {Biometrics Bulletin},
+  volume    = {1},
+  number    = {6},
+  pages     = {80--83},
+  year      = {1945}
+}

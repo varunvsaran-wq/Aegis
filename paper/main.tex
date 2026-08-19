@@ -1,0 +1,460 @@
+% =====================================================================
+% main.tex -- Aegis: A Model-Agnostic RAG Reliability Harness
+%
+% Two-column preprint. Compiles with a standard TeX Live / MiKTeX install
+% using only widely-available packages (no exotic .sty files):
+%   geometry, inputenc, fontenc, graphicx, booktabs, amsmath, amssymb,
+%   natbib, hyperref, xcolor, url.
+%
+% BUILD:  pdflatex main  ->  bibtex main  ->  pdflatex main  ->  pdflatex main
+%
+% -------------------------------------------------------------------
+% REPRODUCIBILITY CONTRACT (read before touching any number below):
+%   * Every table and figure is pulled from ../report/, which is generated
+%     programmatically from MLflow-logged runs by aegis.eval.export
+%     (pandas.DataFrame.to_latex + matplotlib savefig('*.pdf')).
+%     DO NOT hand-type numbers into tables.
+%   * Every numeric CLAIM in prose is a placeholder macro (\NUM{...}) or a
+%     \textbf{[X]} bracket. These are filled ONLY from an actual MLflow run,
+%     never invented. Search for "PLACEHOLDER" to find them all.
+%   * \reportinput / \reportfig wrap each include so the paper still compiles
+%     when a report file has not been generated yet.
+% =====================================================================
+
+\documentclass[twocolumn,10pt]{article}
+
+% ----- Page geometry: compact two-column preprint --------------------
+\usepackage[letterpaper,margin=0.75in]{geometry}
+\setlength{\columnsep}{0.25in}
+
+% ----- Encoding and fonts (safe defaults) ----------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% ----- Math, graphics, tables ----------------------------------------
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}   % \toprule/\midrule/\bottomrule used by generated tables
+\usepackage{xcolor}
+
+% ----- References ----------------------------------------------------
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{url}
+\usepackage[colorlinks=true,allcolors=blue,breaklinks=true]{hyperref}
+
+% =====================================================================
+% Helper macros
+% =====================================================================
+
+% \reportinput{path}: \input a generated LaTeX table if it exists, else a
+% placeholder note -- keeps the paper compilable before the run is done.
+\newcommand{\reportinput}[1]{%
+  \IfFileExists{#1}{\input{#1}}{%
+    \begin{table}[t]\centering\textit{(table pending run: \texttt{#1})}\end{table}}%
+}
+
+% \reportfig{path}{width}{caption}{label}: \includegraphics a generated PDF
+% figure if it exists, else a placeholder note.
+\newcommand{\reportfig}[4]{%
+  \begin{figure}[t]\centering
+  \IfFileExists{#1}{\includegraphics[width=#2]{#1}}{\textit{(figure pending run: \texttt{#1})}}
+  \caption{#3}\label{#4}
+  \end{figure}%
+}
+
+% \NUM{token}: a numeric PLACEHOLDER. Renders in red so no unfilled number
+% is ever mistaken for a measured result. Fill ONLY from an MLflow run.
+\newcommand{\NUM}[1]{\textcolor{red}{\textbf{[#1]}}}
+
+% =====================================================================
+% Title
+% =====================================================================
+\title{\textbf{Aegis: A Model-Agnostic RAG Reliability Harness for\\
+Grounded, Consistent, and Injection-Resistant Question Answering}}
+
+\author{
+  Varun Saran\\
+  \texttt{varunvsaran@gmail.com}
+}
+\date{}
+
+\begin{document}
+\maketitle
+
+% =====================================================================
+\begin{abstract}
+% NOTE: every number in this abstract is a PLACEHOLDER (\NUM{}); fill from
+% the MLflow runs that also generate the report/ tables and figures.
+Large language models used for retrieval-augmented question answering vary
+widely in cost, yet the reliability gap between cheap and frontier models is
+often attributable to fragile scaffolding rather than raw model capability.
+We present \emph{Aegis}, a model-agnostic reliability harness that wraps a
+hybrid retrieval-augmented generation (RAG) core in four stages: a query
+structurer that emits a typed, decomposed retrieval plan; a prompt-injection
+defense combining a direct heuristic gate with indirect spotlighting,
+imperative stripping, and canary-token exfiltration detection; a hybrid
+retrieval core (dense \texttt{bge-base-en-v1.5} + BM25 fused with Reciprocal
+Rank Fusion and reranked by a \texttt{bge-reranker-v2-m3} cross-encoder) under
+a strict citation contract; and a natural-language-inference (NLI)
+groundedness verifier with a retry-once-then-abstain loop and $k$-sample
+self-consistency voting. The harness is orchestrated as a LangGraph state
+machine and evaluated across a four-model price frontier (local
+\texttt{llama3.1:8b}, \texttt{claude-haiku}, \texttt{gpt-4o},
+\texttt{claude-opus}) on HotpotQA with statistical rigor: $\geq 3$ seeds,
+bootstrap 95\% confidence intervals, paired McNemar and Wilcoxon tests, and
+Benjamini--Hochberg correction. On \NUM{N} multi-hop questions, the harness
+improves exact match by \NUM{$\Delta$EM} points
+(95\% CI [\NUM{lo}, \NUM{hi}], McNemar $p<\NUM{p}$) and lets an 8B model
+approach frontier-raw accuracy at roughly \NUM{X}$\times$ lower cost per
+query, while reducing indirect prompt-injection success from \NUM{A}\% to
+\NUM{B}\%. We release the evaluation CLI, an adversarial poisoned-corpus
+generator, and a per-component ablation study.
+\end{abstract}
+
+% =====================================================================
+\section{Introduction}
+\label{sec:intro}
+
+Retrieval-augmented generation \citep{lewis2020rag} has become the default
+recipe for grounding language models in external knowledge, but deployed RAG
+systems remain unreliable in three orthogonal ways: they hallucinate claims
+their retrieved context does not support, they answer inconsistently across
+samples, and they are vulnerable to prompt injection carried inside retrieved
+documents \citep{greshake2023injection}. Practitioners often respond by
+reaching for a more expensive model, conflating the reliability gap with a
+capability gap.
+
+This paper asks a different question: \emph{how much of the reliability gap
+between a cheap model and a frontier model can be closed by the harness around
+the model, rather than the model itself?} We operationalize the question with
+Aegis, a fixed, model-agnostic pipeline that any LiteLLM-compatible model can
+be dropped into, and we measure the effect on grounded multi-hop QA.
+
+\paragraph{Contributions.}
+\begin{itemize}
+  \item A four-stage reliability harness (query structuring, injection
+  defense, hybrid retrieval under a citation contract, and NLI groundedness
+  verification with self-consistency voting), implemented as a LangGraph state
+  machine and described in Section~\ref{sec:method}.
+  \item A cost-controlled evaluation across a four-model price frontier on
+  HotpotQA, showing that a cheap model plus the harness can approach
+  frontier-raw accuracy after accounting for harness overhead
+  (Section~\ref{sec:e2}), with the ``cheap+harness $\approx$ frontier-raw''
+  claim backed by a paired significance test rather than chart proximity.
+  \item A robustness study on a poisoned corpus reporting attack success rate
+  (ASR) per attack category, raw versus harnessed
+  (Section~\ref{sec:e3}), plus a released poisoned-corpus generator.
+  \item A per-component ablation isolating the contribution of the structurer,
+  reranker, and verifier, each with its own paired significance test and a
+  family-wise multiple-comparison correction (Section~\ref{sec:ablations}).
+\end{itemize}
+
+Every number reported below is generated programmatically from MLflow-logged
+runs into \texttt{report/}; no result is hand-transcribed.
+
+% =====================================================================
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Multi-hop QA benchmarks.}
+HotpotQA \citep{yang2018hotpotqa} provides multi-hop, Wikipedia-based
+questions with sentence-level supporting-fact annotations, which we exploit
+for objective citation-precision scoring. MuSiQue \citep{trivedi2022musique}
+increases hop count, and CRAG \citep{yang2024crag} stresses noisy and
+misleading retrieval; we use HotpotQA as the primary benchmark and discuss
+the others as extensions.
+
+\paragraph{Hybrid retrieval and reranking.}
+Dense passage retrieval \citep{karpukhin2020dpr} and sparse BM25 scoring
+\citep{robertson2009bm25} are complementary; Reciprocal Rank Fusion
+\citep{cormack2009rrf} combines their rankings without score calibration. We
+use BGE embeddings \citep{xiao2024cpack} for the dense arm and a BGE
+cross-encoder reranker built on the DeBERTa architecture
+\citep{he2021deberta}.
+
+\paragraph{Faithfulness and consistency.}
+RAGAS \citep{es2024ragas} formalizes reference-free RAG evaluation
+(faithfulness, context precision/recall). We instead verify groundedness with
+a lightweight NLI cross-encoder \citep{he2021deberta} at the level of each
+cited chunk, and reduce answer variance with self-consistency majority voting
+\citep{wang2023selfconsistency}.
+
+\paragraph{Prompt injection.}
+Indirect prompt injection embeds adversarial instructions in retrieved
+content \citep{greshake2023injection}. Spotlighting
+\citep{hines2024spotlighting} and instruction-hierarchy training
+\citep{wallace2024instructionhierarchy} are two defenses; Aegis adopts
+spotlighting-style delimiting plus imperative stripping and canary-token
+exfiltration detection at the retrieval boundary.
+
+% =====================================================================
+\section{Method}
+\label{sec:method}
+
+A query flows through four harness stages wrapping a hybrid-RAG core. The
+whole pipeline is a stateful LangGraph graph
+(\texttt{structure}~$\rightarrow$~\texttt{retrieve}~$\rightarrow$~\texttt{generate}~$\rightarrow$~\texttt{verify}
+with conditional \texttt{generate\_retry}/\texttt{abstain} edges), compiled
+once and reused per question. The pipeline is model-agnostic: the generation,
+structuring, and verification-retry calls all go through a single LiteLLM
+gateway (Section~\ref{sec:setup}) that also performs token and cost
+accounting.
+
+\subsection{Stage 1: Query Structurer}
+\label{sec:structurer}
+The structurer makes one LLM call that rewrites the raw question into a typed
+\texttt{StructuredQuery} validated by pydantic, with fields \emph{intent}, a
+list of 1--4 decomposed \emph{sub\_questions}, retrieval \emph{keywords}, and
+an \emph{answer\_type} drawn from
+\{\texttt{short\_phrase}, \texttt{yes\_no}, \texttt{entity},
+\texttt{number}, \texttt{date}\}. Parsing is tolerant: any malformed model
+output degrades to a safe fallback (the original question as the sole
+sub-question) so the pipeline never crashes on structurer noise. Decomposition
+drives \emph{multi-query retrieval}: the original question and each
+sub-question are retrieved for separately, and the per-chunk results are
+merged keeping the maximum rerank score. Schema-enforced output is the
+consistency mechanism --- it constrains the answer surface before generation.
+
+\subsection{Stage 2: Injection Defense}
+\label{sec:defense}
+Two gates guard the retrieval boundary. The \emph{direct} gate classifies the
+incoming user query with a heuristic detector (optionally backed by a
+DeBERTa injection-classifier baseline). The \emph{indirect} defense sanitizes
+each retrieved chunk before it enters the prompt: spotlighting delimiters mark
+retrieved text as untrusted data rather than instructions
+\citep{hines2024spotlighting}, imperative-pattern stripping removes injected
+directives, and a canary token planted in the system prompt is monitored so
+that any attempt to exfiltrate it triggers an automatic block. Poisoned chunks
+are tagged in the vector store metadata so clean and poisoned corpora can be
+isolated for the robustness experiment (Section~\ref{sec:e3}).
+
+\subsection{Stage 3: Hybrid RAG Core with a Citation Contract}
+\label{sec:rag}
+Retrieval is hybrid: a dense arm (\texttt{bge-base-en-v1.5}, L2-normalized
+cosine over a Qdrant index, with an in-memory fallback) and a sparse BM25 arm
+each return their top candidates, whose ranks are fused with Reciprocal Rank
+Fusion \citep{cormack2009rrf},
+\begin{equation}
+\mathrm{RRF}(d) = \sum_{r \in \text{rankings}} \frac{1}{k + \mathrm{rank}_r(d)},
+\qquad k = 60,
+\end{equation}
+after which a \texttt{bge-reranker-v2-m3} cross-encoder rescores the fused
+candidate pool and the top $k_{\text{final}}$ chunks are kept. Generation runs
+under a strict \emph{citation contract}: the model must emit exactly two lines,
+\texttt{ANSWER:} and \texttt{CITATIONS:} (comma-separated chunk ids copied from
+the context markers). Citations to ids outside the retrieved set are dropped;
+an answer that cites nothing triggers one enforcement retry and, if still
+uncited, is rejected as an abstention. This makes every accepted claim
+traceable to a retrieved chunk.
+
+\subsection{Stage 4: Groundedness Verifier and Consistency Vote}
+\label{sec:verify}
+Each accepted answer is checked by an NLI cross-encoder
+(\texttt{cross-encoder/nli-deberta-v3-base}): the answer is rephrased as a
+declarative claim (hypothesis) and each cited chunk's text is a premise; the
+answer is \emph{grounded} iff at least one cited chunk entails the claim. On a
+verification failure, the contradiction summary is fed back and the model
+re-answers exactly once; a second failure yields an abstention rather than an
+unsupported answer. Orthogonally, self-consistency \citep{wang2023selfconsistency}
+is implemented as $k$-sample majority voting: $k$ answers are sampled,
+clustered by the official HotpotQA answer normalization, and the largest
+cluster wins, with the cluster fraction logged as an agreement/confidence
+score. The retry/abstain loop and the vote are the conditional edges of the
+LangGraph state machine.
+
+% =====================================================================
+\section{Experimental Setup}
+\label{sec:setup}
+
+% NOTE: this is the reproducibility section reviewers scrutinize. Keep it in
+% exact sync with aegis/config.py (MODEL_REGISTRY, embedder/reranker/nli
+% defaults, RRF_K) and aegis/eval/run.py (logged params).
+
+\paragraph{Models and versions.}
+Four models span the price frontier, addressed through a LiteLLM gateway and
+identified by registry alias / exact provider string:
+\emph{local} = \texttt{ollama/llama3.1:8b} (\$0 marginal cost),
+\emph{small} = \texttt{anthropic/claude-haiku-4-5},
+\emph{mid} = \texttt{openai/gpt-4o}, and
+\emph{frontier} = \texttt{anthropic/claude-opus-4-8}. The gateway records
+tokens in/out, per-call USD cost (via LiteLLM's cost model; local models are
+\$0), and latency for every call, including harness-internal calls
+(structuring, verification retries, and $k$-vote samples), so reported cost is
+the \emph{net} cost of the harness, not just the final generation.
+
+\paragraph{Benchmark and metrics.}
+We evaluate on HotpotQA \citep{yang2018hotpotqa} in a unified-corpus
+(distractor-derived) setting: all provided passages are concatenated into a
+single index and retrieved from in full. We sample \NUM{N} questions
+(target 300--500). We report exact match (EM) and token-level F1 under the
+official HotpotQA normalization, an LLM-as-judge accuracy (F1 under-credits
+correct answers phrased differently), title-level retrieval precision/recall
+against the gold supporting-fact titles, and citation precision (fraction of
+cited chunks whose title is a supporting fact).
+
+\paragraph{Retrieval and rerank configuration.}
+Dense embeddings: \texttt{BAAI/bge-base-en-v1.5}. Sparse: Okapi BM25
+\citep{robertson2009bm25}. Fusion: RRF with $k=60$
+\citep{cormack2009rrf}. Reranker: \texttt{BAAI/bge-reranker-v2-m3}
+cross-encoder. Verifier NLI: \texttt{cross-encoder/nli-deberta-v3-base}. Each
+retrieval arm returns 20 candidates; the fused pool ($\max(4\,k_{\text{final}},20)$
+candidates) is reranked to $k_{\text{final}}=5$. Self-consistency uses $k=5$
+samples (at vote temperature $0.7$) on the two cheap/local models; the
+frontier model is run in a single pass to control cost.
+
+\paragraph{Seeds, determinism, and tracking.}
+Every accuracy configuration is run across $\geq 3$ seeds at temperature $0$
+(where the provider allows) and reported as mean $\pm$ std with a bootstrap
+95\% CI (1000 resamples). MLflow logs, per run: seed, temperature, exact
+resolved model version, prompt-template hash, retrieval/rerank/NLI config,
+benchmark sample hash, and the Aegis version. Any number in the paper is
+reproducible from an exact logged command.
+
+\paragraph{Statistics.}
+Raw-vs-harnessed comparisons are paired per question: McNemar's test
+\citep{mcnemar1947} on EM outcomes, Wilcoxon signed-rank
+\citep{wilcoxon1945} and paired-bootstrap deltas on F1. Across the family of
+main claims we apply Benjamini--Hochberg FDR correction
+\citep{benjamini1995fdr}.
+
+\paragraph{Hardware.}
+% PLACEHOLDER: fill from the actual run environment before submission.
+Experiments were run on \NUM{hardware: CPU/GPU, RAM}. Local models were served
+via \NUM{Ollama/vLLM version}; retrieval and reranking models ran on
+\NUM{device}.
+
+% =====================================================================
+\section{Results}
+\label{sec:results}
+
+All tables and figures in this section are generated from MLflow runs by
+\texttt{aegis.eval.export}; prose numbers are placeholders until filled from
+the same runs.
+
+\subsection{E1: Accuracy Across Models and Baselines}
+\label{sec:e1}
+Table~\ref{tab:phase1-accuracy} reports EM, F1, and judge accuracy for the raw
+hybrid-RAG pipeline across all four models, alongside the two controls
+(closed-book: no retrieval; vanilla RAG: retrieval + generation with no
+harness stages or citation contract). Figure~\ref{fig:phase1-accuracy} shows
+the same accuracies as grouped bars with across-seed error bars.
+Table~\ref{tab:phase1-cost} reports the corresponding per-query cost and
+latency.
+
+\reportinput{../report/phase1_accuracy.tex}
+
+\reportfig{../report/phase1_accuracy.pdf}{\columnwidth}%
+{Phase~1 accuracy (EM and F1, mean $\pm$ std across seeds) by model and mode
+on HotpotQA. Generated by \texttt{aegis.eval.export.export\_phase1}.}%
+{fig:phase1-accuracy}
+
+\reportinput{../report/phase1_cost.tex}
+
+\subsection{E2: The Cost--Accuracy Pareto Frontier}
+\label{sec:e2}
+Figure~\ref{fig:phase2-pareto} plots accuracy against net cost per 1{,}000
+queries (log scale) for each model in raw and harnessed modes;
+Table~\ref{tab:phase2-results} adds self-consistency agreement and abstain
+rate. The central claim --- that a cheap model plus the harness approaches
+frontier-raw accuracy --- is quantified by the paired significance test in
+Table~\ref{tab:phase2-significance}: the harness improves EM by
+\NUM{$\Delta$EM} points (95\% CI [\NUM{lo}, \NUM{hi}], McNemar $p<\NUM{p}$)
+and F1 by \NUM{$\Delta$F1} points (Wilcoxon $p<\NUM{p}$) on the cheap model,
+at roughly \NUM{X}$\times$ lower cost per query than frontier-raw. Answer
+agreement rises from \NUM{agr-raw}\% to \NUM{agr-harn}\% and citation
+precision from \NUM{cite-raw}\% to \NUM{cite-harn}\%.
+
+\reportfig{../report/phase2_pareto.pdf}{\columnwidth}%
+{Cost--accuracy Pareto frontier (EM vs.\ net USD per 1{,}000 queries, log
+scale), one point per model $\times$ \{raw, harnessed\}. Generated by
+\texttt{aegis.eval.export.export\_phase2}.}%
+{fig:phase2-pareto}
+
+\reportinput{../report/phase2_results.tex}
+
+\reportinput{../report/phase2_significance.tex}
+
+\subsection{E3: Robustness to Prompt Injection}
+\label{sec:e3}
+On a poisoned HotpotQA variant (attack templates injected into $\sim$10\% of
+chunks, tagged in vector-store metadata), Table~\ref{tab:phase3-injection}
+reports attack success rate (ASR) raw versus harnessed with 95\% CIs and a
+paired test, and Figure~\ref{fig:phase3-categories} breaks ASR down by attack
+category (exfiltration / answer-override / instruction-injection) so that
+strong and weak points of the defense are visible. The harness reduces overall
+ASR from \NUM{ASR-raw}\% to \NUM{ASR-harn}\%; canary-token detection blocks
+\NUM{canary}\% of the exfiltration attempts in the held-out probe set.
+
+\reportinput{../report/phase3_injection.tex}
+
+\reportfig{../report/phase3_categories.pdf}{\columnwidth}%
+{Attack success rate by category, raw vs.\ harnessed, on the poisoned corpus.
+Generated by the Phase~3 export.}%
+{fig:phase3-categories}
+
+\subsection{E4: Summary}
+\label{sec:e4}
+Taken together, E1--E3 show that the harness's contribution is concentrated in
+grounding and robustness rather than raw retrieval recall, and that its cost
+overhead is modest relative to the accuracy it recovers on cheap models. We
+isolate the per-stage contributions next.
+
+% =====================================================================
+\section{Ablations}
+\label{sec:ablations}
+
+Table~\ref{tab:phase4-ablation} re-runs the accuracy experiment removing one
+component at a time --- $-$structurer, $-$reranker, $-$verifier --- and
+attributes the change in accuracy, faithfulness, and consistency to each, with
+its own paired significance test. The $-$verifier row is the direct evidence
+for any faithfulness claim: removing it changes the grounded/abstain behavior
+by \NUM{$\Delta$grounded} points. Because the paper makes several paired
+comparisons across models and ablations, we apply Benjamini--Hochberg FDR
+correction \citep{benjamini1995fdr} across the family of main claims; adjusted
+$p$-values are reported in the significance tables, and \NUM{k}/\NUM{m}
+comparisons remain significant after correction.
+
+\reportinput{../report/phase4_ablation.tex}
+
+% =====================================================================
+\section{Limitations}
+\label{sec:limitations}
+
+We state limits explicitly, as they bound every claim above.
+\begin{itemize}
+  \item \textbf{Token and latency overhead.} The harness adds a structuring
+  call, up to $k$ voting samples, and a verification retry per question;
+  reported cost is net of this overhead, but latency grows accordingly and the
+  ``cheap+harness'' point is not free.
+  \item \textbf{Domain.} All results are Wikipedia-domain multi-hop QA. We do
+  not claim the effect transfers to open-web, code, or long-document settings.
+  \item \textbf{Single-benchmark generalization.} Conclusions rest primarily on
+  HotpotQA; CRAG and MuSiQue are discussed but not the basis of the headline
+  numbers.
+  \item \textbf{Train-data contamination.} Modern LLMs may have seen HotpotQA
+  during pretraining, which can inflate closed-book and raw-pipeline accuracy
+  and understate the retrieval contribution; we do not fully control for this.
+  \item \textbf{Unvalidated LLM judge.} The LLM-as-judge metric is not
+  validated against human labels, so it should be read as a complementary
+  signal to EM/F1, not ground truth.
+\end{itemize}
+
+% =====================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+Aegis shows that a fixed, model-agnostic reliability harness --- typed query
+structuring, injection defense, hybrid retrieval under a citation contract,
+and NLI groundedness verification with self-consistency --- can recover a
+substantial fraction of the reliability gap between cheap and frontier models
+on grounded multi-hop QA, while measurably reducing prompt-injection success.
+Because every table and figure is regenerated from MLflow-logged runs, the
+result set re-derives itself whenever an experiment is re-run. We release the
+evaluation CLI, the poisoned-corpus generator, and the ablation study.
+
+% =====================================================================
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\end{document}

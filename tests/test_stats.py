@@ -11,8 +11,12 @@ pytest.importorskip("statsmodels")
 from aegis.eval.stats import (
     bh_correction,
     bootstrap_ci,
+    hierarchical_bootstrap_ci,
     mcnemar_test,
+    mde_mcnemar,
+    non_inferiority,
     paired_bootstrap_delta,
+    proportion_ci,
     wilcoxon_paired,
 )
 
@@ -120,6 +124,91 @@ class TestBHCorrection:
     def test_empty(self):
         out = bh_correction([])
         assert out == {"reject": [], "p_adjusted": []}
+
+
+class TestMcNemarMethods:
+    @staticmethod
+    def _build(n01: int, n10: int, n_both: int = 50):
+        a = [True] * n_both + [True] * n01 + [False] * n10
+        b = [True] * n_both + [False] * n01 + [True] * n10
+        return a, b
+
+    def test_midp_between_exact_and_asymptotic_significant(self):
+        a, b = self._build(n01=12, n10=3)
+        midp = mcnemar_test(a, b, method="midp")["p_value"]
+        exact = mcnemar_test(a, b, method="exact")["p_value"]
+        assert 0.0 < midp < 0.05
+        # Mid-p is more powerful (smaller) than the conservative exact test.
+        assert midp <= exact
+
+    def test_no_discordance_is_p_one(self):
+        a, b = self._build(n01=0, n10=0)
+        assert mcnemar_test(a, b, method="midp")["p_value"] == 1.0
+
+
+class TestProportionCI:
+    def test_wilson_contains_point(self):
+        ci = proportion_ci(3, 20, method="wilson")
+        assert ci["lo"] <= ci["p"] <= ci["hi"]
+        assert 0.0 <= ci["lo"] and ci["hi"] <= 1.0
+
+    def test_zero_successes_lower_bound_zero(self):
+        ci = proportion_ci(0, 15, method="wilson")
+        assert ci["p"] == 0.0
+        assert ci["lo"] == 0.0
+        assert ci["hi"] > 0.0
+
+    def test_all_successes_upper_bound_one(self):
+        ci = proportion_ci(15, 15, method="clopper")
+        assert ci["hi"] == 1.0
+
+    def test_n_zero_is_full_interval(self):
+        ci = proportion_ci(0, 0)
+        assert math.isnan(ci["p"])
+        assert (ci["lo"], ci["hi"]) == (0.0, 1.0)
+
+
+class TestNonInferiority:
+    def test_clearly_non_inferior(self):
+        rng = np.random.default_rng(0)
+        b = rng.normal(0.6, 0.05, size=200)
+        a = b + 0.01  # a slightly better than b
+        out = non_inferiority(a, b, margin=0.05)
+        assert out["non_inferior"] is True
+        assert out["ci_lo"] > -0.05
+
+    def test_clearly_inferior_fails(self):
+        rng = np.random.default_rng(1)
+        b = rng.normal(0.6, 0.05, size=200)
+        a = b - 0.15  # a much worse than b, beyond the margin
+        out = non_inferiority(a, b, margin=0.05)
+        assert out["non_inferior"] is False
+
+    def test_empty_is_not_non_inferior(self):
+        out = non_inferiority([], [], margin=0.05)
+        assert out["non_inferior"] is False
+        assert math.isnan(out["delta"])
+
+
+class TestHierarchicalBootstrap:
+    def test_mean_inside_interval(self):
+        # 40 questions x 3 seeds, mild seed noise around a per-question mean.
+        rng = np.random.default_rng(0)
+        matrix = [(rng.normal(0.7, 0.05) + rng.normal(0, 0.02, 3)).tolist() for _ in range(40)]
+        mean, lo, hi = hierarchical_bootstrap_ci(matrix, n_boot=500, seed=0)
+        assert lo <= mean <= hi
+
+    def test_empty_is_nan(self):
+        mean, lo, hi = hierarchical_bootstrap_ci([])
+        assert math.isnan(mean) and math.isnan(lo) and math.isnan(hi)
+
+
+class TestMDE:
+    def test_mde_shrinks_with_n(self):
+        small = mde_mcnemar(100)["mde"]
+        large = mde_mcnemar(500)["mde"]
+        assert large < small
+        assert small > 0
 
 
 def test_prompt_hash_deterministic():

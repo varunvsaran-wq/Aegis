@@ -71,6 +71,61 @@ class Answer(BaseModel):
     raw_response: str = ""
 
 
+class StructuredQuery(BaseModel):
+    """A question decomposed by the prompt structurer."""
+
+    intent: str = ""
+    sub_questions: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    answer_type: str = "short_phrase"
+    """One of "short_phrase" | "yes_no" | "entity" | "number" | "date"."""
+
+
+class VerifierReport(BaseModel):
+    """One NLI verifier judgment of a claim against a retrieved chunk."""
+
+    claim: str
+    chunk_id: str
+    label: str
+    """One of "entailment" | "neutral" | "contradiction"."""
+
+    score: float
+    """Probability of the winning label."""
+
+
+class HarnessMeta(BaseModel):
+    """Phase 2 harness diagnostics attached to a :class:`QueryResult`."""
+
+    structured: StructuredQuery | None = None
+    verifier_reports: list[VerifierReport] = Field(default_factory=list)
+    verify_retries: int = 0
+    grounded: bool | None = None
+    """Final verifier verdict for the returned answer."""
+
+    votes: list[str] = Field(default_factory=list)
+    """The k sampled answer strings."""
+
+    agreement: float | None = None
+    """Majority cluster size / k."""
+
+    llm_calls: int = 0
+    """Total generation+structurer calls made."""
+
+    # -- Phase 3 injection-defense diagnostics (populated when use_defense) --
+    direct_injection: bool | None = None
+    """Direct-gate verdict on the user query (None when the gate is off)."""
+
+    direct_injection_score: float | None = None
+    sanitized_chunks: int = 0
+    """Number of retrieved chunks from which an injected span was stripped."""
+
+    canary_leaked: bool = False
+    """True iff the planted canary token appeared in the model output."""
+
+    blocked: bool = False
+    """True iff the defense forced an abstention (direct hit or canary leak)."""
+
+
 class QueryResult(BaseModel):
     """The full record of running one question through the pipeline."""
 
@@ -87,6 +142,7 @@ class QueryResult(BaseModel):
     latency_s: float = 0.0
     tokens_in: int = 0
     tokens_out: int = 0
+    harness: HarnessMeta | None = None
 
 
 class HotpotQuestion(BaseModel):

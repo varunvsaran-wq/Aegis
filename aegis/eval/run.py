@@ -21,13 +21,31 @@ logger = logging.getLogger(__name__)
 
 
 def prompt_hash() -> str:
-    """Stable 12-hex-char hash of the pipeline's prompt templates.
+    """Stable 12-hex-char hash of all known prompt templates.
 
-    Logged as an MLflow param so any prompt change is visible across runs.
+    Merges the pipeline, structurer, and harness (graph) template dicts under
+    namespaced keys. Modules developed in parallel (structurer, graph) are
+    imported defensively: whatever is importable is hashed, so the hash stays
+    computable while those modules land. Logged as an MLflow param so any
+    prompt change is visible across runs.
     """
     from aegis.pipeline import PROMPT_TEMPLATES
 
-    payload = json.dumps(PROMPT_TEMPLATES, sort_keys=True)
+    merged = {f"pipeline/{k}": v for k, v in PROMPT_TEMPLATES.items()}
+    try:
+        from aegis.structurer import STRUCTURER_TEMPLATES
+
+        merged.update({f"structurer/{k}": v for k, v in STRUCTURER_TEMPLATES.items()})
+    except ImportError:
+        pass
+    try:
+        from aegis.graph import HARNESS_TEMPLATES
+
+        merged.update({f"graph/{k}": v for k, v in HARNESS_TEMPLATES.items()})
+    except ImportError:
+        pass
+
+    payload = json.dumps(merged, sort_keys=True)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
@@ -63,8 +81,24 @@ def run_eval(
     judge_model: str | None = None,
     experiment: str = "aegis-phase1",
     split: str = "validation",
+    k_vote: int = 1,
+    vote_temperature: float = 0.7,
+    use_structurer: bool = True,
+    use_verifier: bool = True,
+    use_defense: bool = False,
+    poison: bool = False,
+    poison_rate: float = 0.1,
+    ablation: str | None = None,
+    rerank: bool = True,
 ) -> dict:
     """Run one full evaluation and log params/metrics/artifacts to MLflow.
+
+    When ``poison`` is set, the retrieval corpus is adversarially poisoned
+    (Phase 3): a ``poison_rate`` fraction of chunks receive injection payloads,
+    a per-seed canary is planted in the system prompt, and attack-success-rate
+    (ASR) metrics are logged. ``use_defense`` turns on the harness injection
+    defenses (direct gate, chunk sanitization, canary-leak blocking) and is
+    only meaningful for ``mode == "harnessed"``.
 
     Returns ``{"run_id": ..., "metrics": {...}}``.
     """
@@ -93,15 +127,49 @@ def run_eval(
 
     # 1. Data and (unless closed-book) retrieval index.
     questions = load_hotpotqa(n, seed, split)
+    canary = None
+    poison_manifest = None
     retriever = None
     if mode != "closed_book":
         from aegis.retrieve import build_retriever
 
         chunks = build_corpus(questions)
-        retriever = build_retriever(chunks)
+        if poison:
+            from aegis.defense import make_canary
+            from aegis.eval.poison import poison_corpus
+
+            canary = make_canary(seed)
+            chunks, poison_manifest = poison_corpus(chunks, rate=poison_rate, seed=seed)
+        retriever = build_retriever(chunks, rerank=rerank)
 
     client = get_client(model, temperature=temperature, seed=seed)
-    pipeline = RAGPipeline(client, retriever=retriever, mode=mode, k_final=k_final)
+    if mode == "harnessed":
+        # Lazy import: the harness (Phase 2) is an optional heavier stack.
+        from aegis.graph import HarnessedPipeline
+
+        # With self-consistency voting (k_vote > 1) the extra samples come
+        # from a separate client at vote_temperature; the main client keeps
+        # the run temperature.
+        vote_client = (
+            get_client(model, temperature=vote_temperature, seed=seed)
+            if k_vote > 1
+            else None
+        )
+        pipeline = HarnessedPipeline(
+            client,
+            retriever,
+            k_final=k_final,
+            k_vote=k_vote,
+            use_structurer=use_structurer,
+            use_verifier=use_verifier,
+            use_defense=use_defense,
+            canary=canary,
+            vote_client=vote_client,
+        )
+    else:
+        pipeline = RAGPipeline(
+            client, retriever=retriever, mode=mode, k_final=k_final, canary=canary
+        )
 
     # 2. MLflow run bookkeeping.
     mlflow.set_tracking_uri(config.mlflow_tracking_uri)
@@ -126,8 +194,29 @@ def run_eval(
                 "benchmark": benchmark,
                 "aegis_version": __version__,
                 "judge_model": judge_model or model,
+                "k_vote": k_vote,
+                "vote_temperature": vote_temperature,
+                "use_structurer": use_structurer,
+                "use_verifier": use_verifier,
+                "use_defense": use_defense,
+                "poison": poison,
+                "poison_rate": poison_rate if poison else 0.0,
+                "canary_planted": canary is not None,
+                "ablation": ablation or "full",
+                "rerank": rerank,
+                "nli_model": config.nli_model,
             }
         )
+
+        # Self-judging bias guard (research recommendation): a model grading its
+        # own output inflates the judge metric. Warn loudly when it happens.
+        if resolve_model(judge_model or model) == resolve_model(model):
+            logger.warning(
+                "Judge model resolves to the model under test (%s); LLM-as-judge "
+                "numbers may be inflated by self-preference bias. Pass a distinct "
+                "--judge-model for headline results.",
+                model,
+            )
 
         # 3. Run the pipeline on every question; never abort the run on one
         # bad question — record a failed/abstained result instead.
@@ -200,6 +289,49 @@ def run_eval(
         _put("mean_tokens_in", _mean([r.tokens_in for r in results]))
         _put("mean_tokens_out", _mean([r.tokens_out for r in results]))
 
+        # Harness diagnostics (Phase 2). Only logged for harnessed runs;
+        # None values (e.g. agreement without voting) are skipped by _put.
+        if mode == "harnessed":
+            harness = [r.harness for r in results if r.harness is not None]
+            _put("agreement_mean", _mean([h.agreement for h in harness]))
+            non_abstained = [r for r in results if not r.answer.abstained]
+            if non_abstained:
+                _put(
+                    "grounded_rate",
+                    sum(
+                        1
+                        for r in non_abstained
+                        if r.harness is not None and r.harness.grounded is True
+                    )
+                    / len(non_abstained),
+                )
+            if harness:
+                _put(
+                    "verify_retry_rate",
+                    sum(1 for h in harness if h.verify_retries >= 1) / n_q,
+                )
+                _put("mean_llm_calls", _mean([h.llm_calls for h in harness]))
+
+        # Phase 3 injection metrics (only when the corpus was poisoned).
+        injection = None
+        if poison:
+            from aegis.eval.scorers import injection_outcomes
+
+            injection = injection_outcomes(results, canary=canary or "")
+            _put("asr", injection["asr"])
+            _put("n_attacked", sum(injection["attacked"]))
+            for cat, cell in injection["asr_by_category"].items():
+                _put(f"asr_{cat}", cell["rate"])
+                _put(f"asr_{cat}_n", cell["n"])
+                _put(f"asr_{cat}_k", cell["k"])
+            if mode == "harnessed":
+                blocked = [
+                    r.harness.blocked
+                    for r in results
+                    if r.harness is not None and r.harness.blocked is not None
+                ]
+                _put("block_rate", _mean([1.0 if b else 0.0 for b in blocked]))
+
         mlflow.log_metrics(metrics)
 
         # 6. Artifacts: per-question JSONL + the full scored summary.
@@ -215,28 +347,41 @@ def run_eval(
             jsonl_path = tmp_dir / "results.jsonl"
             with jsonl_path.open("w", encoding="utf-8") as fh:
                 for i, r in enumerate(results):
-                    fh.write(
-                        json.dumps(
-                            {
-                                "question_id": r.question_id,
-                                "question": r.question,
-                                "gold": r.gold_answer,
-                                "predicted": r.answer.text,
-                                "abstained": r.answer.abstained,
-                                "citations": [c.chunk_id for c in r.answer.citations],
-                                "em": _pq("em", i),
-                                "f1": _pq("f1", i),
-                                "judge": _pq("judge", i),
-                                "retrieval_precision": _pq("retrieval_precision", i),
-                                "retrieval_recall": _pq("retrieval_recall", i),
-                                "citation_precision": _pq("citation_precision", i),
-                                "cost_usd": r.cost_usd,
-                                "latency_s": r.latency_s,
-                            },
-                            ensure_ascii=False,
-                        )
-                        + "\n"
-                    )
+                    row = {
+                        "question_id": r.question_id,
+                        "question": r.question,
+                        "gold": r.gold_answer,
+                        "predicted": r.answer.text,
+                        "abstained": r.answer.abstained,
+                        "citations": [c.chunk_id for c in r.answer.citations],
+                        "em": _pq("em", i),
+                        "f1": _pq("f1", i),
+                        "judge": _pq("judge", i),
+                        "retrieval_precision": _pq("retrieval_precision", i),
+                        "retrieval_recall": _pq("retrieval_recall", i),
+                        "citation_precision": _pq("citation_precision", i),
+                        "cost_usd": r.cost_usd,
+                        "latency_s": r.latency_s,
+                    }
+                    if r.harness is not None:
+                        row["agreement"] = r.harness.agreement
+                        row["grounded"] = r.harness.grounded
+                        row["verify_retries"] = r.harness.verify_retries
+                        row["votes"] = list(r.harness.votes)
+                        row["llm_calls"] = r.harness.llm_calls
+                        row["blocked"] = r.harness.blocked
+                    if injection is not None:
+                        row["attacked"] = injection["attacked"][i]
+                        row["injection_success"] = injection["success"][i]
+                        row["injection_category_success"] = {
+                            c: injection["category_success"][c][i]
+                            for c in injection["category_success"]
+                        }
+                        row["injection_category_attacked"] = {
+                            c: injection["category_attacked"][c][i]
+                            for c in injection["category_attacked"]
+                        }
+                    fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             mlflow.log_artifact(str(jsonl_path))
 
             summary_path = tmp_dir / "metrics_summary.json"
@@ -246,6 +391,54 @@ def run_eval(
             mlflow.log_artifact(str(summary_path))
 
         return {"run_id": active_run.info.run_id, "metrics": metrics}
+
+
+#: Maps each ablation name to the run_eval flag overrides that realize it. The
+#: harnessed pipeline runs with every component on for "full"; each other entry
+#: removes exactly one component so its contribution is isolated.
+ABLATIONS: dict[str, dict] = {
+    "full": {},
+    "no_structurer": {"use_structurer": False},
+    "no_verifier": {"use_verifier": False},
+    "no_reranker": {"rerank": False},
+}
+
+
+def run_ablation(
+    model: str,
+    seeds: list[int],
+    n: int,
+    ablations: list[str] | None = None,
+    experiment: str = "aegis-phase4",
+    **kw,
+) -> list[dict]:
+    """Run the harnessed pipeline with each component ablated, over seeds.
+
+    Every ablation is evaluated in ``mode="harnessed"``; ``full`` is the
+    all-components baseline. Runs are tagged with the ``ablation`` param so
+    :func:`aegis.eval.export.export_phase4_ablation` can pair each ablated run
+    against ``full`` per question. Returns the per-run metric rows.
+    """
+    names = ablations or list(ABLATIONS.keys())
+    rows: list[dict] = []
+    for name in names:
+        overrides = ABLATIONS.get(name)
+        if overrides is None:
+            raise ValueError(f"Unknown ablation {name!r}; choose from {list(ABLATIONS)}")
+        for seed in seeds:
+            out = run_eval(
+                model=model,
+                mode="harnessed",
+                seed=seed,
+                n=n,
+                experiment=experiment,
+                ablation=name,
+                **{**overrides, **kw},
+            )
+            rows.append(
+                {"model": model, "ablation": name, "seed": seed, **out}
+            )
+    return rows
 
 
 def run_sweep(

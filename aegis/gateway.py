@@ -8,6 +8,7 @@ served by the built-in, deterministic :class:`MockLLM` with no network access
 and no litellm import, which keeps tests and smoke runs hermetic.
 """
 
+import json
 import re
 import time
 
@@ -17,21 +18,38 @@ from aegis.types import LLMResponse
 _CHUNK_MARKER_RE = re.compile(r"\[\[chunk:([^\]]+)\]\]")
 _MOCK_MODEL_VERSION = "mock/echo"
 
+_STRUCTURER_TOKEN_RE = re.compile(r"[a-z0-9]+")
+_STRUCTURER_STOPWORDS = frozenset(
+    {
+        "the", "a", "an", "of", "in", "on", "was", "were", "is", "are",
+        "what", "which", "who", "when", "where", "did", "does", "and", "that",
+    }
+)  # fmt: skip
+_YES_NO_STARTERS = frozenset(
+    {"is", "are", "was", "were", "did", "does", "do", "can", "has", "have"}
+)
+
 
 class MockLLM:
     """Deterministic, zero-network fake LLM.
 
     Given the full prompt text (all message contents concatenated), it applies
-    three rules in order:
+    four rules in order:
 
     1. **Citation rule** — if the prompt contains ``[[chunk:<id>]]`` markers,
        answer with the first sentence of the first chunk's text and cite that
        chunk's id.
-    2. **Judge rule** — if the prompt contains both a ``Gold answer:`` line
+    2. **Structurer rule** — if the prompt contains both
+       ``Return ONLY a JSON object`` and ``sub_questions``, return a
+       deterministic JSON decomposition of the text after the last line
+       starting with ``Question:`` (split on the first ``" and "`` into two
+       sub-questions, keyword extraction with a tiny stopword list, and a
+       yes/no vs. short-phrase answer-type heuristic).
+    3. **Judge rule** — if the prompt contains both a ``Gold answer:`` line
        and a ``Candidate answer:`` line, return ``CORRECT`` when one
        normalized answer is a substring of the other (and the candidate is
        non-empty), else ``INCORRECT``.
-    3. **Fallback** — return ``I don't know.``
+    4. **Fallback** — return ``I don't know.``
 
     Identical input always produces identical output: there is no randomness
     and no time-dependent behavior.
@@ -42,6 +60,9 @@ class MockLLM:
         citation = self._citation_rule(prompt)
         if citation is not None:
             return citation
+        structured = self._structurer_rule(prompt)
+        if structured is not None:
+            return structured
         judged = self._judge_rule(prompt)
         if judged is not None:
             return judged
@@ -71,6 +92,63 @@ class MockLLM:
         _question = MockLLM._line_value(prompt, "Question:")
 
         return f"ANSWER: {first_sentence}\nCITATIONS: {first.group(1)}"
+
+    @staticmethod
+    def _structurer_rule(prompt: str) -> str | None:
+        """Emit a deterministic JSON decomposition for structurer prompts.
+
+        Fires only when the prompt contains BOTH ``Return ONLY a JSON
+        object`` and ``sub_questions``. The question is the text after the
+        last line starting with ``Question:``. Output is ``json.dumps(...,
+        sort_keys=True)`` with:
+
+        - ``intent``: always ``"answer the question"``.
+        - ``sub_questions``: if the literal ``" and "`` appears, split on
+          the FIRST occurrence into two sub-questions (stripped, each
+          ensured to end with ``?``); otherwise just the question.
+        - ``keywords``: lowercase alphanumeric tokens longer than 3 chars,
+          stopwords removed, first 6, in question order.
+        - ``answer_type``: ``"yes_no"`` if the lowercased question starts
+          with a yes/no auxiliary (is, are, was, were, did, does, do, can,
+          has, have), else ``"short_phrase"``.
+        """
+        if "Return ONLY a JSON object" not in prompt or "sub_questions" not in prompt:
+            return None
+
+        question = ""
+        for line in prompt.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("Question:"):
+                question = stripped[len("Question:") :].strip()
+
+        if " and " in question:
+            parts = question.split(" and ", 1)
+            sub_questions = []
+            for part in parts:
+                part = part.strip()
+                if not part.endswith("?"):
+                    part += "?"
+                sub_questions.append(part)
+        else:
+            sub_questions = [question]
+
+        tokens = _STRUCTURER_TOKEN_RE.findall(question.lower())
+        keywords = [
+            t for t in tokens if len(t) > 3 and t not in _STRUCTURER_STOPWORDS
+        ][:6]
+
+        first_word = tokens[0] if tokens else ""
+        answer_type = "yes_no" if first_word in _YES_NO_STARTERS else "short_phrase"
+
+        return json.dumps(
+            {
+                "intent": "answer the question",
+                "sub_questions": sub_questions,
+                "keywords": keywords,
+                "answer_type": answer_type,
+            },
+            sort_keys=True,
+        )
 
     @staticmethod
     def _judge_rule(prompt: str) -> str | None:

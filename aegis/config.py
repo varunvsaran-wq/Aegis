@@ -56,6 +56,10 @@ def _default_reranker() -> str:
     return os.environ.get("AEGIS_RERANKER", "BAAI/bge-reranker-v2-m3")
 
 
+def _default_nli_model() -> str:
+    return os.environ.get("AEGIS_NLI", "cross-encoder/nli-deberta-v3-base")
+
+
 class AegisConfig(BaseModel):
     """Global configuration. Obtain via :func:`get_config`."""
 
@@ -74,6 +78,9 @@ class AegisConfig(BaseModel):
 
     reranker: str = Field(default_factory=_default_reranker)
     """Cross-encoder reranker model, or "fake" for tests."""
+
+    nli_model: str = Field(default_factory=_default_nli_model)
+    """Cross-encoder NLI verifier model, or "fake" for tests."""
 
     retrieval_backend: str = Field(
         default_factory=lambda: os.environ.get("AEGIS_RETRIEVAL_BACKEND", "auto")

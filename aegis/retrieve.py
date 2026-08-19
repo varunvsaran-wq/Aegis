@@ -196,17 +196,24 @@ class HybridRetriever:
         for rank, (i, _score) in enumerate(sparse, start=1):
             fused[i] = fused.get(i, 0.0) + _rrf(rank)
 
-        n_candidates = max(k_final * 4, 20)
+        # A cross-encoder earns its keep only when it re-scores a large
+        # candidate pool; a pool of ~20 starves it. 50-100 is the sweet spot
+        # (see Cross-encoder reranking literature) at negligible extra cost.
+        n_candidates = max(k_final * 10, 50)
         candidates = sorted(fused, key=lambda i: fused[i], reverse=True)[:n_candidates]
         if not candidates:
             return []
 
-        rerank_scores = self.reranker.score(
-            query, [self.index.chunks[i].text for i in candidates]
-        )
-        order = sorted(
-            zip(candidates, rerank_scores), key=lambda pair: pair[1], reverse=True
-        )[:k_final]
+        if self.reranker is None:
+            # -reranker ablation: keep the RRF-fused order, no cross-encoder.
+            order = [(i, fused[i]) for i in candidates[:k_final]]
+        else:
+            rerank_scores = self.reranker.score(
+                query, [self.index.chunks[i].text for i in candidates]
+            )
+            order = sorted(
+                zip(candidates, rerank_scores), key=lambda pair: pair[1], reverse=True
+            )[:k_final]
         return [
             RetrievalResult(
                 chunk=self.index.chunks[i],
@@ -220,14 +227,18 @@ class HybridRetriever:
 
 
 def build_retriever(
-    chunks: list[Chunk], config: AegisConfig | None = None
+    chunks: list[Chunk], config: AegisConfig | None = None, rerank: bool = True
 ) -> HybridRetriever:
-    """Build index, embedder, and reranker from config and wire them together."""
+    """Build index, embedder, and reranker from config and wire them together.
+
+    ``rerank=False`` builds a retriever with no cross-encoder (the
+    ``-reranker`` ablation): retrieval stops at the RRF-fused order.
+    """
     config = config or get_config()
     index = build_or_load_index(chunks, config)
     return HybridRetriever(
         index=index,
         embedder=get_embedder(config),
-        reranker=get_reranker(config),
+        reranker=get_reranker(config) if rerank else None,
         backend=config.retrieval_backend,
     )
