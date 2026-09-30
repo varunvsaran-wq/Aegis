@@ -92,3 +92,17 @@ def build_corpus(questions: list[HotpotQuestion]) -> list[Chunk]:
                 )
             )
     return chunks
+
+
+def remove_supporting_paragraphs(
+    chunks: list[Chunk], questions: list[HotpotQuestion]
+) -> list[Chunk]:
+    """Drop every paragraph that holds a supporting fact for any of ``questions``.
+
+    Turns the answerable corpus into an *unanswerable* one: the distractor
+    paragraphs stay, so retrieval still returns plausible-looking context, but
+    the evidence needed to answer is gone. A reliable system should decline;
+    answering anyway means guessing or falling back on memorized knowledge.
+    """
+    gold_titles = {title for q in questions for title, _ in q.supporting_facts}
+    return [c for c in chunks if c.title not in gold_titles]

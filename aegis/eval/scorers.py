@@ -325,3 +325,39 @@ def score_results(
         "retrieval_recall_mean": _mean(retrieval_r),
         "citation_precision_mean": _mean(cited) if cited else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Three-way judge: correct / incorrect / no answer.
+# ---------------------------------------------------------------------------
+
+#: Grades free-text responses of any length, so a verbose plain-RAG reply and a
+#: terse harnessed answer are scored on the same terms.
+JUDGE3_PROMPT_TEMPLATE = (
+    "You are grading a question-answering system.\n"
+    "Question: {question}\n"
+    "Gold answer: {gold}\n"
+    "System response: {response}\n\n"
+    "Classify the response with exactly one label:\n"
+    "CORRECT - it commits to an answer equivalent to the gold answer.\n"
+    "INCORRECT - it commits to a different answer, even if hedged.\n"
+    "NO_ANSWER - it declines, says the information is not available, or gives no answer.\n"
+    "Reply with only the label."
+)
+
+JUDGE3_LABELS = ("CORRECT", "INCORRECT", "NO_ANSWER")
+
+
+def judge3(client, question: str, gold: str, response: str) -> str:
+    """Label a response CORRECT / INCORRECT / NO_ANSWER with an LLM judge.
+
+    Empty responses and a bare "unknown" are NO_ANSWER without a model call.
+    """
+    if normalize_answer(response or "") in {"", "unknown"}:
+        return "NO_ANSWER"
+    prompt = JUDGE3_PROMPT_TEMPLATE.format(question=question, gold=gold, response=response)
+    text = client.complete([{"role": "user", "content": prompt}], max_tokens=10).text.upper()
+    for label in ("NO_ANSWER", "INCORRECT", "CORRECT"):  # INCORRECT contains CORRECT
+        if label in text:
+            return label
+    return "INCORRECT"

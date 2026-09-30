@@ -7,6 +7,7 @@ Endpoints:
 - ``POST /answer`` — answer a question, ``harness`` toggling the reliability
   stack (query structuring, injection defense, citation contract, NLI
   verification).
+- ``POST /compare`` — the same question with the harness off and on.
 
 Run with ``uvicorn aegis.serve.api:app`` or ``aegis serve --api``. The default
 model is the deterministic mock so the service boots with no credentials; set
@@ -26,7 +27,10 @@ def get_engine():
     """Lazily construct the process-wide :class:`AegisEngine`."""
     global _engine
     if _engine is None:
+        from aegis.config import load_dotenv
         from aegis.serve.engine import AegisEngine
+
+        load_dotenv()
 
         _engine = AegisEngine(model=os.environ.get("AEGIS_SERVE_MODEL", "mock"))
     return _engine
@@ -74,6 +78,17 @@ def create_app():
         from dataclasses import asdict
 
         return asdict(engine.answer(req.question, harness=req.harness))
+
+    @app.post("/compare")
+    def compare(req: AnswerRequest) -> dict:
+        """Answer with the harness off and on, side by side."""
+        engine = get_engine()
+        if engine._retriever is None:
+            raise HTTPException(status_code=409, detail="call /index first")
+        from dataclasses import asdict
+
+        off, on = engine.compare(req.question)
+        return {"harness_off": asdict(off), "harness_on": asdict(on)}
 
     return app
 

@@ -314,14 +314,18 @@ _PARETO_MARKERS = ["o", "s", "^", "D", "v", "P"]
 
 
 def export_phase2(
-    experiment: str = "aegis-phase2", report_dir: Path | None = None
+    experiment: str = "aegis-phase2",
+    report_dir: Path | None = None,
+    png: bool = False,
 ) -> list[Path]:
     """Export the Phase 2 cost/accuracy Pareto figure and the results table.
 
     Reads all runs of ``experiment`` from MLflow, aggregates across seeds per
     (model, mode), and writes ``phase2_pareto.pdf`` and ``phase2_results.tex``
-    into ``report_dir`` (default: config.report_dir). Returns the list of
-    written paths. Raises ``RuntimeError`` if the experiment has no runs.
+    into ``report_dir`` (default: config.report_dir). With ``png=True`` a
+    web-ready ``phase2_pareto.png`` (~1600px, light background) is written too
+    for embedding on a web page. Returns the list of written paths. Raises
+    ``RuntimeError`` if the experiment has no runs.
     """
     import mlflow
     import numpy as np
@@ -480,6 +484,13 @@ def export_phase2(
     fig.tight_layout()
     pareto_path = report_dir / "phase2_pareto.pdf"
     fig.savefig(pareto_path, format="pdf", bbox_inches="tight")
+    if png:
+        # ~1600px wide (5.8in * 280dpi) on a white ground for the web page.
+        png_path = report_dir / "phase2_pareto.png"
+        fig.savefig(
+            png_path, format="png", dpi=280, bbox_inches="tight", facecolor="white"
+        )
+        written.append(png_path)
     plt.close(fig)
     written.append(pareto_path)
 
@@ -906,6 +917,8 @@ def export_phase3(
     experiment: str = "aegis-phase3",
     models: list[str] | None = None,
     report_dir: Path | None = None,
+    png: bool = False,
+    csv: bool = False,
 ) -> list[Path]:
     """Export the Phase 3 injection results table and per-category ASR figure.
 
@@ -913,8 +926,11 @@ def export_phase3(
     bootstrap CIs and BH-adjusted McNemar p-values) and
     ``phase3_categories.pdf`` (grouped raw-vs-harnessed ASR bars per attack
     category with Wilson 95% intervals, pooled across models) into
-    ``report_dir``. Raises ``RuntimeError`` if the experiment has no poisoned
-    runs for any model in both modes.
+    ``report_dir``. With ``png=True`` a web-ready ``injection.png`` is also
+    written; with ``csv=True`` an ``injection.csv``
+    (``category,harness_off,harness_on`` ASR percentages) for drawing the chart
+    elsewhere. Raises ``RuntimeError`` if the experiment has no poisoned runs
+    for any model in both modes.
     """
     import mlflow
     import numpy as np
@@ -1050,8 +1066,29 @@ def export_phase3(
     fig.tight_layout()
     cat_path = report_dir / "phase3_categories.pdf"
     fig.savefig(cat_path, format="pdf", bbox_inches="tight")
+    if png:
+        png_path = report_dir / "injection.png"
+        fig.savefig(
+            png_path, format="png", dpi=280, bbox_inches="tight", facecolor="white"
+        )
+        written.append(png_path)
     plt.close(fig)
     written.append(cat_path)
+
+    # Optional CSV: pooled per-category ASR (%), harness off vs on, for the
+    # portfolio page to render the chart in its own style.
+    if csv:
+        import csv as _csv
+
+        csv_path = report_dir / "injection.csv"
+        with csv_path.open("w", newline="", encoding="utf-8") as fh:
+            writer = _csv.writer(fh)
+            writer.writerow(["category", "harness_off", "harness_on"])
+            for cat in ATTACK_CATEGORIES:
+                off = pooled_k[cat]["a"] / pooled_n[cat]["a"] if pooled_n[cat]["a"] else 0.0
+                on = pooled_k[cat]["b"] / pooled_n[cat]["b"] if pooled_n[cat]["b"] else 0.0
+                writer.writerow([cat, f"{100 * off:.1f}", f"{100 * on:.1f}"])
+        written.append(csv_path)
 
     return written
 

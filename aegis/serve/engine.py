@@ -27,6 +27,7 @@ class EngineResult:
     grounded: bool | None = None
     agreement: float | None = None
     blocked: bool = False
+    sanitized_chunks: int = 0
     retrieved: list[dict] = field(default_factory=list)
     cost_usd: float = 0.0
     latency_s: float = 0.0
@@ -69,6 +70,8 @@ class AegisEngine:
         self.model = model
         self.k_final = k_final
         self._retriever = None
+        self._verifier = None
+        self._indexed: tuple[str, ...] | None = None
 
     def index(self, documents: list[str]) -> int:
         """(Re)build the retrieval index over ``documents``; returns #chunks."""
@@ -76,10 +79,33 @@ class AegisEngine:
 
         chunks = _chunk_documents(documents)
         self._retriever = build_retriever(chunks) if chunks else None
+        self._indexed = tuple(documents)
         return len(chunks)
 
+    def ensure_indexed(self, documents: list[str]) -> None:
+        """Index ``documents`` unless they are exactly what is already indexed."""
+        if self._indexed != tuple(documents):
+            self.index(documents)
+
+    def _get_verifier(self):
+        """Build the NLI verifier once; reloading it per question is slow."""
+        if self._verifier is None:
+            from aegis.config import get_config
+            from aegis.verify import GroundednessVerifier, get_nli
+
+            self._verifier = GroundednessVerifier(get_nli(get_config()))
+        return self._verifier
+
+    def compare(self, question: str) -> tuple[EngineResult, EngineResult]:
+        """Answer ``question`` with the harness off and on: ``(off, on)``."""
+        return self.answer(question, harness=False), self.answer(question, harness=True)
+
     def answer(self, question: str, harness: bool = True) -> EngineResult:
-        """Answer ``question``; ``harness`` toggles the full reliability stack."""
+        """Answer ``question``; ``harness`` toggles the full reliability stack.
+
+        Harness off is plain ``vanilla_rag`` (retrieve + generate, no citation
+        contract), which is the baseline the paper and portfolio compare against.
+        """
         from aegis.gateway import get_client
 
         q = HotpotQuestion(
@@ -103,12 +129,13 @@ class AegisEngine:
                 k_final=self.k_final,
                 use_defense=True,
                 canary=make_canary("live"),
+                verifier=self._get_verifier(),
             )
         else:
             from aegis.pipeline import RAGPipeline
 
             pipeline = RAGPipeline(
-                client, retriever=self._retriever, mode="raw_rag", k_final=self.k_final
+                client, retriever=self._retriever, mode="vanilla_rag", k_final=self.k_final
             )
 
         result = pipeline.run(q)
@@ -126,6 +153,7 @@ def _to_engine_result(result, harnessed: bool) -> EngineResult:
         grounded=(harness.grounded if harness else None),
         agreement=(harness.agreement if harness else None),
         blocked=(harness.blocked if harness else False),
+        sanitized_chunks=(harness.sanitized_chunks if harness else 0),
         retrieved=[
             {
                 "chunk_id": r.chunk.id,

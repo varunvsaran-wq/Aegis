@@ -1,0 +1,134 @@
+% Prose for aegis_report.tex. Every number is a macro from numbers.tex; do not
+% type numbers here.
+
+\newcommand{\Summary}{%
+\section*{Summary}
+
+Aegis is a harness I built around retrieval-augmented question answering
+(RAG). The idea is to make a cheap model safer to rely on: check each answer
+against the documents it was drawn from, and decline when the check fails. I
+tested it with Claude Haiku~4.5 on \NQuestions{} HotpotQA questions that played
+no part in building it, against the same model with plain RAG.
+
+The harness does one job clearly well. When I deleted the paragraphs that
+answer each question, plain RAG still answered \UnansAnsweredPlain\% of them.
+Aegis answered \UnansAnsweredAegis\% (\UnansAnsweredPvPlainText). Plain RAG got
+\UnansMemoryPlain\% of those questions right anyway, which it can only have
+done from the model's memory, since the documents no longer held the answer.
+
+That caution is expensive on questions the documents do answer. Aegis declined
+\AnsNoAnsAegis\% of them, against \AnsNoAnsPlain\% for plain RAG, so its
+accuracy fell from \AnsAccPlain\% to \AnsAccAegis\%. It gave fewer wrong
+answers (\AnsWrongAegis\% against \AnsWrongPlain\%), but with this many
+questions that gap could be chance (\AnsWrongPvPlainText). When Aegis does
+answer it is right \AnsSelAccAegis\% of the time; plain RAG is right
+\AnsSelAccPlain\% of the time when it answers.
+
+Planted prompt injections had no effect on any system. Haiku ignored every
+one, with or without the harness, so this study can't tell whether the
+injection defense helps.
+}
+
+\newcommand{\ResultsProse}{%
+\paragraph{Evidence removed.} This is where the harness earns its keep. Plain
+RAG answered \UnansAnsweredPlain\% of these questions, RAG with citations
+\UnansAnsweredCite\%, and Aegis \UnansAnsweredAegis\%. Many of plain RAG's
+answers were right (\UnansMemoryPlain\% of all questions), because HotpotQA is
+built from Wikipedia and has been public since 2018, so Haiku has probably seen
+much of it. Whether that counts as a failure depends on the use. For a system
+that is supposed to answer from a company's own documents, an answer that no
+document supports is exactly the failure: it looks sourced and isn't, and
+nobody can check it.
+
+\paragraph{Answerable questions.} Figure~\ref{fig:breakdown} shows the trade.
+Of the \PlainWrongN{} questions plain RAG got wrong, Aegis declined
+\PlainWrongAegisDeclined, got \PlainWrongAegisCorrect{} right, and got
+\PlainWrongAegisWrong{} wrong. So the verifier does catch most of the model's
+mistakes. But of the \PlainRightN{} questions plain RAG got right, Aegis also
+declined \PlainRightAegisDeclined{} (\PlainRightAegisDeclinedPct\%). The
+verifier can't separate a wrong answer from a correct one whose support it
+fails to confirm, and the second kind is far more common. When I read through
+the correct answers it rejected on the development set, they were comparisons
+(``which came to market first'') and multi-hop answers whose support is split
+across two passages, which an NLI model trained on single sentence pairs
+handles poorly. I did not read through the test-set rejections, since that
+would have been tuning on the test set. The result is that accuracy on the
+questions Aegis does answer barely moves.
+
+\paragraph{Citations on their own.} Asking for a short answer plus citations,
+without the rest of the harness, made things a little worse: wrong answers went
+from \AnsWrongPlain\% to \AnsWrongCite\%, and correct ones from \AnsAccPlain\%
+to \AnsAccCite\%. Against this variant, Aegis's lower wrong-answer rate is
+significant (\AnsWrongPvCiteText). A citation format alone doesn't make answers
+more reliable; checking the citations does.
+
+\paragraph{Injected corpus.} Plain RAG, RAG with citations and Aegis repeated
+a planted answer in \InjAsrPlain\%, \InjAsrCite\% and \InjAsrAegis\% of
+\InjAsrN{} questions, including the ones using the five phrasings held out
+from development. In one case plain RAG answered correctly
+and then quoted the planted note to warn the reader it looked wrong. Under
+attack, Aegis's accuracy (\InjAccAegis\%, against \InjAccPlain\% for plain RAG)
+fell for the same reason as on the answerable questions: declines.
+}
+
+\newcommand{\DevProse}{%
+I made three changes to the harness while looking only at the 40 development
+questions, and tried a fourth that I dropped. Table~\ref{tab:dev} shows each
+step; the first version declined most answerable questions.
+
+\paragraph{Citations by number.} Passage ids look like
+\texttt{Justin Gimelstob::277}. Haiku usually cited just the number
+(``CITATIONS: 278, 277''), and the parser kept only exact ids, so correct
+answers were thrown out as uncited. It now accepts a bare number or title when
+it matches exactly one retrieved passage and still drops anything else. The
+same bug affected the RAG~+ citations baseline, and it is fixed in every number
+in this report.
+
+\paragraph{Verifier claims.} The verifier used to ask the NLI model whether a
+passage entails ``The answer to the question `\ldots' is: X.'' NLI models are
+trained on plain sentence pairs, and this template made the model answer
+``neutral'' on answers the passages clearly supported. Now the model under test
+first restates the question and answer as one sentence, and the NLI model
+checks that sentence against the cited passages, alone and together. This is
+the same move FActScore and RAGAS make: turn the answer into a claim before
+checking it.
+
+\paragraph{Spotlighting instructions.} The defense already wrapped passages in
+data markers but never told the model what the markers meant, which is half of
+the spotlighting technique. The system prompt now says so. Haiku ignored the
+injections before this change too, so it didn't show up in the numbers.
+
+\paragraph{Dropped: a larger NLI model.} I tried DeBERTa-v3-large trained on
+more NLI datasets (MNLI, FEVER, ANLI, LingNLI and WANLI). It declined fewer
+answerable questions but let through more answers with the evidence removed.
+Not answering in that case is the harness's main job, so I kept the smaller
+model. On 40 questions the two differed by only a few questions each way, so
+this was a judgement call, not a measured win.
+
+After these changes I stopped tuning and ran the test set once.
+}
+
+\newcommand{\LimitsProse}{%
+\paragraph{One model.} Haiku~4.5 is strong enough that it ignored every
+injection and rarely answered wrong on its own, which leaves the harness little
+to fix. A weaker model, such as a local 8B model, would probably show bigger
+effects in both directions. I didn't test one.
+
+\paragraph{One dataset.} HotpotQA is Wikipedia trivia with short answers, and
+much of it is probably in Haiku's training data. The results may not carry over
+to long answers or to documents the model has never seen.
+
+\paragraph{An LLM judge.} Claude Sonnet~4.6 labelled every response. It is a
+different model from the one under test, but I did not check its labels against
+human judgements, and an error in the judge moves every number here.
+
+\paragraph{Sample size.} The confidence intervals in Table~\ref{tab:main} are
+wide, and differences of a few points are within them. The $p$-values are not
+corrected for the number of comparisons.
+
+\paragraph{The decline rate.} Declining over a third of answerable questions
+is too many for most uses. A product built on this would probably show the
+unverified answer with a warning rather than hide it, and the verifier needs to
+get better at comparisons and multi-hop answers before the trade is worth making
+in general.
+}

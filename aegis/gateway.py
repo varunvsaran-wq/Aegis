@@ -236,12 +236,27 @@ class ModelClient:
         from tenacity import (
             Retrying,
             retry_if_exception_type,
+            retry_if_not_exception_type,
             stop_after_attempt,
             wait_exponential,
         )
 
+        # Errors that will fail identically on every attempt: retrying them only
+        # adds backoff delay before the same failure.
+        permanent = tuple(
+            getattr(litellm.exceptions, name)
+            for name in (
+                "UnsupportedParamsError",
+                "AuthenticationError",
+                "BadRequestError",
+                "NotFoundError",
+                "PermissionDeniedError",
+            )
+            if hasattr(litellm.exceptions, name)
+        )
         retryer = Retrying(
-            retry=retry_if_exception_type(Exception),
+            retry=retry_if_exception_type(Exception)
+            & retry_if_not_exception_type(permanent),
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=1, min=1, max=8),
             reraise=True,
@@ -253,7 +268,10 @@ class ModelClient:
             model=self.resolved_model,
             messages=messages,
             temperature=self.temperature,
+            # Not every provider takes a seed (Anthropic rejects it). The seed is
+            # still logged to MLflow; drop_params sends it only where supported.
             seed=self.seed,
+            drop_params=True,
             max_tokens=max_tokens,
         )
         latency = time.perf_counter() - start

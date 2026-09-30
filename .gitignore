@@ -25,3 +25,23 @@ models_cache/
 # Handoff docs
 HANDOFF(1).md
 HANDOFF.md
+aegis-demo-handoff.md
+
+# Generated portfolio artifacts
+traces.json
+
+# LaTeX build byproducts
+report/demo/*.aux
+report/demo/*.log
+report/demo/*.out
+report/demo/*.fls
+report/demo/*.fdb_latexmk
+cs_harness/report/*.aux
+cs_harness/report/*.log
+cs_harness/report/*.out
+
+# Vendored third-party benchmarks (cloned, not committed)
+third_party/
+
+# Local-only: incomplete or stopped runs kept for reference
+report/_archive/

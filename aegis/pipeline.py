@@ -68,23 +68,52 @@ def format_context(retrieved: list[RetrievalResult]) -> str:
     return "\n\n".join(blocks)
 
 
+def _resolve_citation(cited: str, valid: list[str]) -> str | None:
+    """Map a model's citation to the retrieved chunk id it refers to.
+
+    Chunk ids look like ``"<title>::<index>"``. Models often shorten them to
+    just the index ("CITATIONS: 60, 62") or just the title, which an exact-match
+    check throws away, turning correct answers into uncited abstentions. Accept
+    an exact id, the index alone, the title alone, or the id with different
+    spacing or case, but only when exactly one retrieved chunk matches.
+    Anything ambiguous or unknown is still dropped as a hallucinated citation.
+    """
+    if cited in valid:
+        return cited
+
+    def norm(s: str) -> str:
+        return " ".join(s.lower().replace(" :: ", "::").split())
+
+    by_norm = [v for v in valid if norm(v) == norm(cited)]
+    if len(by_norm) == 1:
+        return by_norm[0]
+    if cited.isdigit():
+        by_index = [v for v in valid if v.rsplit("::", 1)[-1] == cited]
+        return by_index[0] if len(by_index) == 1 else None
+    by_title = [v for v in valid if norm(v.rsplit("::", 1)[0]) == norm(cited)]
+    return by_title[0] if len(by_title) == 1 else None
+
+
 def parse_contract(
     text: str, valid_ids: Iterable[str] | None = None
 ) -> tuple[str, list[str]]:
     """Tolerantly parse an ``ANSWER:`` / ``CITATIONS:`` contract response.
 
     Returns ``(answer, citation_ids)``. The first line starting with
-    ``ANSWER:`` (case-insensitive, leading whitespace ignored) supplies the
-    answer; the first line starting with ``CITATIONS:`` is split on commas
-    with brackets, whitespace, and any ``chunk:`` prefix stripped from each
-    id. If ``valid_ids`` is given, ids not exactly matching it (hallucinated
-    citations) are dropped. Missing lines yield ``""`` / ``[]``.
+    ``ANSWER:`` (case-insensitive; leading whitespace and markdown emphasis
+    such as ``**ANSWER:**`` ignored) supplies the answer; the first line
+    starting with ``CITATIONS:`` is split on commas with brackets, whitespace,
+    and any ``chunk:`` prefix stripped from each id. If ``valid_ids`` is given,
+    each citation is resolved to a retrieved id by :func:`_resolve_citation`
+    and unresolvable ones (hallucinated citations) are dropped. Missing lines
+    yield ``""`` / ``[]``.
     """
     answer: str | None = None
     citations: list[str] = []
 
     for line in text.splitlines():
-        stripped = line.strip()
+        # Drop markdown emphasis/heading marks so "**ANSWER:** x" parses.
+        stripped = line.strip().lstrip("#>-").replace("**", "").replace("__", "").strip()
         lowered = stripped.lower()
         if answer is None and lowered.startswith("answer:"):
             answer = stripped[len("answer:") :].strip()
@@ -98,8 +127,12 @@ def parse_contract(
                     citations.append(cid)
 
     if valid_ids is not None:
-        valid = set(valid_ids)
-        citations = [c for c in citations if c in valid]
+        valid = list(dict.fromkeys(valid_ids))
+        citations = [
+            resolved
+            for c in citations
+            if (resolved := _resolve_citation(c, valid)) is not None
+        ]
 
     # De-duplicate while preserving order.
     seen: set[str] = set()

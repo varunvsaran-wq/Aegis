@@ -14,6 +14,14 @@ app = typer.Typer(
 console = Console()
 
 
+@app.callback()
+def _main() -> None:
+    """Load API keys from a local .env (if present) before any command runs."""
+    from aegis.config import load_dotenv
+
+    load_dotenv()
+
+
 def _parse_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
@@ -280,12 +288,13 @@ def compare_cmd(
 @app.command("export2")
 def export2_cmd(
     experiment: str = typer.Option("aegis-phase2", "--experiment"),
+    png: bool = typer.Option(False, "--png", help="Also write a web-ready PNG."),
 ) -> None:
     """Export the Phase 2 Pareto figure, results table, and significance table."""
     from aegis.eval.export import export_phase2, export_phase2_significance
 
     try:
-        paths = export_phase2(experiment=experiment)
+        paths = export_phase2(experiment=experiment, png=png)
     except RuntimeError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1)
@@ -377,12 +386,14 @@ def ablate_cmd(
 @app.command("export3")
 def export3_cmd(
     experiment: str = typer.Option("aegis-phase3", "--experiment"),
+    png: bool = typer.Option(False, "--png", help="Also write a web-ready PNG."),
+    csv: bool = typer.Option(False, "--csv", help="Also write injection.csv."),
 ) -> None:
     """Export the Phase 3 injection table and per-category ASR figure."""
     from aegis.eval.export import export_phase3
 
     try:
-        paths = export_phase3(experiment=experiment)
+        paths = export_phase3(experiment=experiment, png=png, csv=csv)
     except RuntimeError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1)
@@ -415,11 +426,18 @@ def serve_cmd(
     api: bool = typer.Option(False, "--api", help="Launch the FastAPI server."),
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8000, "--port"),
+    model: str = typer.Option(
+        None, "--model", help="Model alias for answers (default: $AEGIS_SERVE_MODEL or mock)."
+    ),
 ) -> None:
     """Serve Aegis: the Gradio demo (--demo) or the FastAPI API (--api)."""
+    import os
+
     if demo == api:
         console.print("[red]Error:[/red] pass exactly one of --demo or --api.")
         raise typer.Exit(code=1)
+    if model:
+        os.environ["AEGIS_SERVE_MODEL"] = model
     if demo:
         from aegis.serve.demo import build_demo
 

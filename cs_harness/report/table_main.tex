@@ -1,0 +1,10 @@
+\begin{tabular}{llrrrrrr}
+\toprule
+Arm & Agent & Solved (\%) & Solved every try & DB correct & \$/conv. & \$/solved & Blocks (false) \\
+\midrule
+A & Plain agent, gpt-4o-mini & 26.2 {\scriptsize[15.0, 38.8]} & 0.0\% & 29.3\% & 0.0151 & 0.057 & -- \\
+B & Harness, code checker, gpt-4o-mini & 43.8 {\scriptsize[26.2, 61.3]} & 25.0\% & 50.0\% & 0.0166 & 0.038 & 72 (3) \\
+D & Harness, AI checker, gpt-4o-mini & 31.2 {\scriptsize[17.5, 46.2]} & 5.0\% & 32.5\% & 0.0215 & 0.069 & 227 (17) \\
+E & Plain stronger model, gpt-4.1-mini & 47.5 {\scriptsize[32.5, 62.5]} & 20.0\% & 50.0\% & 0.0145 & 0.031 & -- \\
+\bottomrule
+\end{tabular}

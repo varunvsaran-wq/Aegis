@@ -56,9 +56,18 @@ class STEmbedder:
         if self._model is None:
             from sentence_transformers import SentenceTransformer  # lazy
 
-            self._model = SentenceTransformer(
-                self.name, cache_folder=str(self._data_dir / "models_cache")
-            )
+            from aegis._models import cached_model
+
+            from aegis._models import to_inference_precision
+
+            def _load():
+                model = SentenceTransformer(
+                    self.name, cache_folder=str(self._data_dir / "models_cache")
+                )
+                to_inference_precision(model)
+                return model
+
+            self._model = cached_model("embedder", self.name, _load)
         return self._model
 
     def encode(self, texts: list[str]) -> np.ndarray:

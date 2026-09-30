@@ -1,71 +1,75 @@
 # Aegis
 
-**Can a structured harness make a cheap model match an expensive model on grounded QA?**
+**Can a harness around a cheap model make it reliable enough to trust?**
 
-Aegis is a model-agnostic RAG reliability harness evaluated on HotpotQA. It wraps any
-litellm-compatible model in a fixed pipeline and measures how much of the reliability gap
-between cheap and frontier models the harness itself can close.
+Aegis is a set of reliability harnesses for LLM applications, each tested against
+the same model without the harness on held-out data, with confidence intervals and
+paired tests. It has two parts, and the second exists because of what the first showed.
 
-## Architecture
+## 1. Customer-service harness (current)
 
-The harness is a four-stage pipeline:
+[`cs_harness/`](cs_harness/) · report: [`cs_harness/report/cs_report.pdf`](cs_harness/report/cs_report.pdf)
 
-1. **Structurer** — decomposes the incoming question into a structured retrieval plan.
-2. **Injection defense** — screens retrieved content for prompt-injection and poisoning.
-3. **Hybrid RAG core** — dense + sparse retrieval with fusion and reranking, and a strict
-   citation contract: every claim in the answer must cite a retrieved chunk.
-4. **NLI verifier** — checks that cited chunks actually entail the answer; unsupported
-   answers trigger abstention.
+An airline support agent on [tau2-bench](https://github.com/sierra-research/tau2-bench),
+where an AI plays the customer and a task only counts if the booking database ends up
+exactly right. Before the agent can book, change, cancel or compensate, the harness checks
+the action against the airline's written policy, **in code**, using the live booking
+records. A blocked action never runs; the agent is told which rule it broke and can repair
+the call or turn the customer down.
 
-## Quickstart
+On 20 held-out tasks with GPT-4o-mini (4 tries each):
+
+| | Solved | Solved on every try | $ per solved task |
+|---|---|---|---|
+| Plain agent | 26.2% | 0% | 0.057 |
+| **Harness, code checker** | **43.8%** | **25%** | **0.038** |
+| Harness, AI-model checker | 31.2% | 5% | 0.069 |
+| Plain GPT-4.1-mini (stronger model) | 47.5% | 20% | 0.031 |
+
+The code checker blocked 72 actions, 3 of them correct ones; the same loop with an AI
+checker blocked 227, 17 of them correct. With 20 tasks the gain over the plain agent is
+large but not yet statistically certain (95% CI -1.2 to +36.2 points, p = 0.088). Test plan,
+frozen before the test run: [`cs_harness/PROTOCOL.md`](cs_harness/PROTOCOL.md).
+
+## 2. Retrieval QA harness (first version)
+
+[`aegis/`](aegis/) · report: [`report/demo/aegis_report.pdf`](report/demo/aegis_report.pdf)
+
+A RAG pipeline on HotpotQA (hybrid BM25 + dense retrieval, cross-encoder reranking) with a
+query structurer, prompt-injection defense, a citation contract, and an NLI verifier that
+retries once and then abstains. On 150 held-out questions with Claude Haiku 4.5 it cut
+answers given without evidence from 12.7% to 3.3%, but declined 39% of answerable
+questions, and its accuracy on the questions it did answer was no better than plain RAG.
+The verifier was an AI model that rejected correct answers about as often as wrong ones.
+That result is why part 1 uses a checker written in code.
 
 ```bash
-uv sync                         # or: pip install -e .[dev]
+uv sync                         # or: pip install -e .[dev,serve]
 aegis --help
-
-# Phase 1/2 — accuracy + cost frontier (sweep models x modes x seeds)
-aegis sweep --models mock --modes closed_book,vanilla_rag,raw_rag,harnessed --seeds 0,1,2 --n 300
-aegis export --experiment aegis-phase1
-aegis export2 --experiment aegis-phase2
-
-# Phase 3 — prompt-injection robustness on a poisoned corpus
-aegis inject --models mock --seeds 0,1,2 --n 300 --poison-rate 0.1
-aegis export3 --experiment aegis-phase3
-
-# Phase 4 — component ablations
-aegis ablate --model mock --seeds 0,1,2 --n 300
-aegis export4 --experiment aegis-phase4
-
-# Live demo with a harness on/off toggle (needs the `serve` extra)
-aegis serve --demo          # Gradio UI
-aegis serve --api           # FastAPI (uvicorn) at /answer, /index, /health
+aegis serve --demo --model small   # side-by-side demo: plain RAG vs the harness
+python scripts/demo_benchmark.py --help   # the held-out benchmark behind the report
 ```
 
-Swap `--model mock` for a registry alias (`local`, `small`, `mid`, `frontier` — see
-`aegis models`) to run real models via LiteLLM. The `mock` model is deterministic and
-needs no credentials, so the whole pipeline (including the demo/API) runs offline.
+The HotpotQA stack also has the original research tooling: multi-seed MLflow sweeps,
+a poisoned-corpus generator, component ablations, and a statistics module
+([`aegis/eval/stats.py`](aegis/eval/stats.py)) with bootstrap and clustered CIs, mid-p
+McNemar, Wilcoxon, Wilson intervals, non-inferiority tests and Benjamini-Hochberg
+correction. See [`scripts/README.md`](scripts/README.md) for the benchmark and report
+commands, and `aegis --help` for the rest.
 
-## Status
+## Setup notes
 
-All four phases are implemented:
+- API keys go in a local `.env` (gitignored): `ANTHROPIC_API_KEY` for the HotpotQA
+  work, `OPENROUTER_API_KEY` for the customer-service harness.
+- tau2-bench is not vendored. Clone it into `third_party/` as described in
+  [`cs_harness/README.md`](cs_harness/README.md); it needs Python 3.12 or 3.13.
+- The raw conversation records behind the customer-service report are committed,
+  gzipped, in `cs_harness/results/runs/`, so every number in that report can be
+  regenerated without re-running the models.
 
-- **Phase 1** — hybrid RAG core (dense bge + BM25 → RRF → cross-encoder rerank) under a
-  citation contract, HotpotQA EM/F1 + LLM-as-judge, MLflow tracking, bootstrap CIs.
-- **Phase 2** — query structurer, NLI groundedness verifier with retry-then-abstain,
-  k-sample self-consistency, and the cost-vs-accuracy Pareto frontier (LangGraph).
-- **Phase 3** — prompt-injection defense (direct heuristic gate, indirect
-  spotlighting/imperative-stripping, canary-token exfiltration blocking) and a
-  standalone poisoned-corpus generator; attack-success-rate reported per category.
-- **Phase 4** — component ablations with per-component significance tests, the LaTeX
-  paper (`paper/`), and the FastAPI + Gradio serving layer.
+## Tests
 
-Statistical methods live in [`aegis/eval/stats.py`](aegis/eval/stats.py): bootstrap and
-hierarchical (question-clustered) CIs, mid-p McNemar, Wilcoxon, paired-bootstrap deltas,
-Wilson/Clopper-Pearson proportion intervals, TOST non-inferiority testing, power/MDE
-analysis, and Benjamini-Hochberg correction.
-
-## Reproducibility
-
-All experiment runs are tracked with MLflow (local `mlruns/` by default; override with
-`AEGIS_MLFLOW_URI`). Every number in the paper is generated from logged runs — no
-hand-copied results.
+```bash
+pytest -q                                              # HotpotQA harness, offline
+cd third_party/tau2-bench && .venv/Scripts/python.exe -m pytest ../../cs_harness/tests -q
+```

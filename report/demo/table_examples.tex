@@ -1,0 +1,13 @@
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.14\linewidth}>{\raggedright\arraybackslash}p{0.3\linewidth}>{\raggedright\arraybackslash}p{0.26\linewidth}>{\raggedright\arraybackslash}p{0.2\linewidth}}
+\toprule
+Case & Question \textit{(gold answer)} & Plain RAG said & Aegis said \\
+\midrule
+Evidence removed & What is the English translation of the noodle similar to Taglierini that is not tagliatelle? \textit{(little hairs)} & Bavette is the noodle similar to tagliolini (note: the question says "Taglierini" but the text… & \emph{declined} \\
+ & Where did the descendants of the group of black Indians associated with the Seminole people settle? \textit{(Coahuila, Mexico)} & The descendants of the Black Seminoles settled in Oklahoma. According to the chunk on the Semi… & \emph{declined} \\
+\addlinespace
+Answerable: error caught & Which country is the firm that owns Babycham located? \textit{(Australia)} & Babycham is owned by Accolade Wines. However, the provided chunks do not contain information a… & \emph{declined} \\
+ & What does the business Manny Cussins was chairman of make? \textit{(furniture)} & Manny Cussins was chairman of Leeds United F.C., which is a football (soccer) club. However, t… & \emph{declined} \\
+\addlinespace
+Answerable: correct answer lost & Who starred in Love and other drugs and The Simpsons? \textit{(Henry Albert "Hank" Azaria)} & Hank Azaria starred in both Love \& Other Drugs and The Simpsons. He is listed as one of the ac… & \emph{declined} \\
+\bottomrule
+\end{tabular}

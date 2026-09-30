@@ -1,0 +1,333 @@
+{
+  "arms": {
+    "A": {
+      "label": "Plain agent (gpt-4o-mini)",
+      "run": "test_A_plain_4omini",
+      "n_tasks": 20,
+      "trials": 4,
+      "conversations": 80,
+      "per_task": {
+        "13": 0.75,
+        "19": 0.5,
+        "2": 0.5,
+        "22": 0.0,
+        "16": 0.25,
+        "18": 0.5,
+        "8": 0.75,
+        "26": 0.25,
+        "30": 0.0,
+        "31": 0.25,
+        "25": 0.5,
+        "24": 0.0,
+        "29": 0.0,
+        "35": 0.0,
+        "32": 0.75,
+        "48": 0.0,
+        "37": 0.0,
+        "44": 0.0,
+        "45": 0.0,
+        "6": 0.25
+      },
+      "pass_k": {
+        "1": 0.2625,
+        "2": 0.10833333333333335,
+        "3": 0.0375,
+        "4": 0.0
+      },
+      "db_match": 0.29333333333333333,
+      "cost_total": 1.2040499,
+      "cost_per_conversation": 0.01505062375,
+      "cost_per_success": 0.05733570952380952,
+      "guard": {
+        "blocked_write_calls": 0,
+        "false_blocks": 0,
+        "repaired": 0,
+        "gave_up": 0,
+        "held_later_writes": 0
+      }
+    },
+    "B": {
+      "label": "Code-checked harness (gpt-4o-mini)",
+      "run": "test_B_code_4omini",
+      "n_tasks": 20,
+      "trials": 4,
+      "conversations": 80,
+      "per_task": {
+        "22": 0.0,
+        "2": 0.25,
+        "13": 1.0,
+        "16": 0.5,
+        "8": 0.0,
+        "18": 0.25,
+        "19": 0.75,
+        "26": 1.0,
+        "30": 0.0,
+        "31": 1.0,
+        "24": 0.25,
+        "25": 0.75,
+        "37": 0.0,
+        "29": 0.0,
+        "48": 1.0,
+        "32": 0.75,
+        "35": 0.0,
+        "44": 0.25,
+        "45": 1.0,
+        "6": 0.0
+      },
+      "pass_k": {
+        "1": 0.4375,
+        "2": 0.3333333333333333,
+        "3": 0.2875,
+        "4": 0.25
+      },
+      "db_match": 0.5,
+      "cost_total": 1.32699405,
+      "cost_per_conversation": 0.016587425625,
+      "cost_per_success": 0.03791411571428571,
+      "guard": {
+        "blocked_write_calls": 72,
+        "false_blocks": 3,
+        "repaired": 1,
+        "gave_up": 1,
+        "held_later_writes": 31
+      }
+    },
+    "D": {
+      "label": "AI-checked harness (gpt-4o-mini)",
+      "run": "test_D_llmcheck_4omini",
+      "n_tasks": 20,
+      "trials": 4,
+      "conversations": 80,
+      "per_task": {
+        "6": 0.75,
+        "22": 0.0,
+        "13": 0.75,
+        "18": 0.0,
+        "19": 0.75,
+        "2": 0.5,
+        "16": 0.25,
+        "8": 0.5,
+        "26": 0.25,
+        "30": 0.0,
+        "31": 0.5,
+        "24": 0.0,
+        "25": 0.0,
+        "32": 0.25,
+        "29": 0.0,
+        "48": 1.0,
+        "35": 0.0,
+        "37": 0.0,
+        "45": 0.75,
+        "44": 0.0
+      },
+      "pass_k": {
+        "1": 0.3125,
+        "2": 0.175,
+        "3": 0.1,
+        "4": 0.05
+      },
+      "db_match": 0.3246753246753247,
+      "cost_total": 1.7165384000000001,
+      "cost_per_conversation": 0.02145673,
+      "cost_per_success": 0.06866153600000001,
+      "guard": {
+        "blocked_write_calls": 227,
+        "false_blocks": 17,
+        "repaired": 2,
+        "gave_up": 5,
+        "held_later_writes": 27
+      }
+    },
+    "E": {
+      "label": "Plain stronger model (gpt-4.1-mini)",
+      "run": "test_E_plain_41mini",
+      "n_tasks": 20,
+      "trials": 4,
+      "conversations": 80,
+      "per_task": {
+        "18": 0.5,
+        "2": 0.5,
+        "19": 0.0,
+        "16": 1.0,
+        "8": 0.75,
+        "22": 0.25,
+        "13": 0.25,
+        "24": 0.75,
+        "25": 0.5,
+        "29": 0.0,
+        "26": 0.5,
+        "30": 1.0,
+        "31": 0.5,
+        "45": 0.5,
+        "48": 0.25,
+        "32": 1.0,
+        "37": 0.0,
+        "44": 0.25,
+        "6": 1.0,
+        "35": 0.0
+      },
+      "pass_k": {
+        "1": 0.475,
+        "2": 0.3,
+        "3": 0.225,
+        "4": 0.2
+      },
+      "db_match": 0.5,
+      "cost_total": 1.1616148,
+      "cost_per_conversation": 0.014520185,
+      "cost_per_success": 0.030568810526315788,
+      "guard": {
+        "blocked_write_calls": 0,
+        "false_blocks": 0,
+        "repaired": 0,
+        "gave_up": 0,
+        "held_later_writes": 0
+      }
+    },
+    "A-h": {
+      "label": "Plain agent, human-like customer",
+      "run": "test_Ah_plain_4omini_humanlike",
+      "n_tasks": 20,
+      "trials": 2,
+      "conversations": 40,
+      "per_task": {
+        "16": 0.0,
+        "18": 0.5,
+        "22": 0.0,
+        "19": 0.5,
+        "24": 0.0,
+        "13": 1.0,
+        "8": 0.5,
+        "6": 0.5,
+        "26": 0.5,
+        "2": 0.5,
+        "25": 0.0,
+        "31": 0.5,
+        "30": 0.0,
+        "45": 0.0,
+        "48": 0.0,
+        "35": 0.0,
+        "37": 0.0,
+        "32": 1.0,
+        "29": 0.0,
+        "44": 0.0
+      },
+      "pass_k": {
+        "1": 0.275,
+        "2": 0.1
+      },
+      "db_match": 0.3076923076923077,
+      "cost_total": 0.42245074999999993,
+      "cost_per_conversation": 0.010561268749999998,
+      "cost_per_success": 0.03840461363636363,
+      "guard": {
+        "blocked_write_calls": 0,
+        "false_blocks": 0,
+        "repaired": 0,
+        "gave_up": 0,
+        "held_later_writes": 0
+      }
+    },
+    "B-h": {
+      "label": "Code-checked harness, human-like customer",
+      "run": "test_Bh_code_4omini_humanlike",
+      "n_tasks": 20,
+      "trials": 2,
+      "conversations": 40,
+      "per_task": {
+        "2": 1.0,
+        "22": 0.0,
+        "16": 0.5,
+        "19": 0.5,
+        "13": 1.0,
+        "18": 0.0,
+        "24": 0.0,
+        "30": 0.0,
+        "26": 0.0,
+        "31": 1.0,
+        "8": 0.0,
+        "37": 0.0,
+        "44": 0.0,
+        "29": 0.0,
+        "32": 1.0,
+        "45": 1.0,
+        "25": 0.0,
+        "48": 1.0,
+        "35": 0.0,
+        "6": 0.5
+      },
+      "pass_k": {
+        "1": 0.375,
+        "2": 0.3
+      },
+      "db_match": 0.42105263157894735,
+      "cost_total": 0.62047525,
+      "cost_per_conversation": 0.015511881250000002,
+      "cost_per_success": 0.04136501666666667,
+      "guard": {
+        "blocked_write_calls": 24,
+        "false_blocks": 3,
+        "repaired": 4,
+        "gave_up": 0,
+        "held_later_writes": 10
+      }
+    }
+  },
+  "comparisons": {
+    "B vs A": {
+      "n": 20,
+      "diff": 0.175,
+      "ci": [
+        -0.0125,
+        0.3625
+      ],
+      "p_wilcoxon": 0.08771131420728451,
+      "tasks_better": 10,
+      "tasks_worse": 4
+    },
+    "B vs D": {
+      "n": 20,
+      "diff": 0.125,
+      "ci": [
+        -0.0375,
+        0.275
+      ],
+      "p_wilcoxon": 0.08315030902752188,
+      "tasks_better": 10,
+      "tasks_worse": 3
+    },
+    "B vs E": {
+      "n": 20,
+      "diff": -0.0375,
+      "ci": [
+        -0.275,
+        0.2
+      ],
+      "p_wilcoxon": 0.777374464821522,
+      "tasks_better": 7,
+      "tasks_worse": 9
+    },
+    "D vs A": {
+      "n": 20,
+      "diff": 0.05,
+      "ci": [
+        -0.1,
+        0.2125
+      ],
+      "p_wilcoxon": 0.6955329032760176,
+      "tasks_better": 5,
+      "tasks_worse": 4
+    },
+    "B-h vs A-h": {
+      "n": 20,
+      "diff": 0.1,
+      "ci": [
+        -0.075,
+        0.275
+      ],
+      "p_wilcoxon": 0.4059142563253315,
+      "tasks_better": 5,
+      "tasks_worse": 3
+    }
+  }
+}

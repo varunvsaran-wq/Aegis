@@ -203,3 +203,67 @@ class TestMajorityVote:
         winner, agreement, _ = majority_vote(["Paris", "", "Paris"])
         assert winner == "Paris"
         assert agreement == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Verifier robustness: spotlight markers, sentence answers, multi-hop evidence
+# ---------------------------------------------------------------------------
+
+
+class _RecordingNLI(FakeNLI):
+    def __init__(self):
+        self.premises = []
+
+    def predict_batch(self, pairs):
+        self.premises.extend(p for p, _ in pairs)
+        return super().predict_batch(pairs)
+
+
+def test_spotlight_markers_are_stripped_from_premises():
+    from aegis.defense import DATA_CLOSE, DATA_OPEN, spotlight
+
+    nli = _RecordingNLI()
+    retrieved = [_rr("France::0", "France", spotlight("Paris is the capital of France."))]
+    answer = Answer(text="Paris", citations=[Citation(chunk_id="France::0")])
+    grounded, _ = GroundednessVerifier(nli).verify(answer, retrieved, QUESTION)
+    assert grounded is True
+    assert all(DATA_OPEN not in p and DATA_CLOSE not in p for p in nli.premises)
+
+
+def test_sentence_answer_is_also_tested_as_its_own_claim():
+    from aegis.verify import _claim_forms
+
+    forms = _claim_forms("The Mona Lisa is held at the Louvre.", "Which painting?")
+    assert forms[0].startswith("The answer to the question")
+    assert forms[0].endswith("Louvre.") and not forms[0].endswith("..")
+    assert forms[1] == "The Mona Lisa is held at the Louvre."
+    assert _claim_forms("Dijon", "Where?") == ["The answer to the question 'Where?' is: Dijon."]
+
+
+def test_multihop_claim_grounded_by_cited_chunks_together():
+    # Claim content tokens: {where, designer, tower, born, dijon}. Each chunk
+    # covers 2/5 (below FakeNLI's 0.6 entailment bar); together they cover 4/5.
+    retrieved = [
+        _rr("Tower::0", "Tower", "gustave eiffel was the designer of the tower"),
+        _rr("Eiffel::0", "Eiffel", "gustave eiffel was born in dijon"),
+    ]
+    answer = Answer(
+        text="Dijon",
+        citations=[Citation(chunk_id="Tower::0"), Citation(chunk_id="Eiffel::0")],
+    )
+    question = "Where was the designer of the tower born?"
+    grounded, reports = GroundednessVerifier(FakeNLI()).verify(answer, retrieved, question)
+    assert [r.label for r in reports[:2]] == ["neutral", "neutral"]
+    assert grounded is True
+    assert reports[-1].chunk_id == "Tower::0+Eiffel::0"
+    assert reports[-1].label == "entailment"
+
+
+def test_explicit_claims_replace_the_templates():
+    retrieved = [_rr("France::0", "France", "Paris is the capital of France.")]
+    answer = Answer(text="Paris", citations=[Citation(chunk_id="France::0")])
+    grounded, reports = GroundednessVerifier(FakeNLI()).verify(
+        answer, retrieved, QUESTION, claims=["Bananas are purple."]
+    )
+    assert grounded is False
+    assert reports[0].claim == "Bananas are purple."

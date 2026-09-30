@@ -6,6 +6,8 @@ The structurer and verifier are injected as test doubles; the LLM is the
 real deterministic mock client from aegis.gateway.
 """
 
+import pytest
+
 from aegis.gateway import get_client
 from aegis.graph import HARNESS_TEMPLATES, HarnessedPipeline
 from aegis.types import (
@@ -292,4 +294,55 @@ def test_structurer_and_verifier_disabled():
     assert res.harness.structured.sub_questions == [q.question]
     assert retriever.queries == [q.question]
     # Single generation call, nothing else.
+    assert res.harness.llm_calls == 1
+
+
+class ClaimAwareVerifier:
+    """Records the claims the harness passes in."""
+
+    def __init__(self):
+        self.seen_claims = []
+
+    def verify(self, answer, retrieved, question, claims=None):
+        self.seen_claims.append(claims)
+        return True, [_report()]
+
+
+class _ClaimClient:
+    """Answers the contract, then returns a fixed sentence for the claim prompt."""
+
+    model = "mock"
+
+    def __init__(self):
+        self.calls = []
+
+    def complete(self, messages, max_tokens=1024):
+        prompt = messages[-1]["content"]
+        self.calls.append(prompt)
+        if prompt.startswith("Rewrite the question and its answer"):
+            text = "Paris is the capital of France."
+        else:
+            text = "ANSWER: Paris\nCITATIONS: Paris::0"
+        return LLMResponse(text=text, model="mock", model_version="mock/echo", cost_usd=0.001)
+
+
+def test_verifier_checks_the_rewritten_claim_and_its_cost_is_counted():
+    client = _ClaimClient()
+    verifier = ClaimAwareVerifier()
+    pipe = HarnessedPipeline(client, FakeRetriever(), use_structurer=False, verifier=verifier)
+    res = pipe.run(_question())
+    assert verifier.seen_claims == [["Paris is the capital of France."]]
+    # generation + claim rewrite, both billed to the question.
+    assert res.harness.llm_calls == 2
+    assert res.cost_usd == pytest.approx(0.002)
+
+
+def test_claim_rewrite_can_be_disabled():
+    client = _ClaimClient()
+    verifier = ClaimAwareVerifier()
+    pipe = HarnessedPipeline(
+        client, FakeRetriever(), use_structurer=False, verifier=verifier, rewrite_claims=False
+    )
+    res = pipe.run(_question())
+    assert verifier.seen_claims == [None]
     assert res.harness.llm_calls == 1

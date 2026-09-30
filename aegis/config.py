@@ -16,6 +16,9 @@ MODEL_REGISTRY: dict[str, str] = {
     "small": "anthropic/claude-haiku-4-5",
     "mid": "openai/gpt-4o",
     "frontier": "anthropic/claude-opus-4-8",
+    # Hosted weak model (OpenRouter), for testing the harness where the base
+    # model makes more mistakes. Needs OPENROUTER_API_KEY.
+    "weak": "openrouter/meta-llama/llama-3.1-8b-instruct",
 }
 
 _REGISTRY_FILE = Path("aegis.yaml")
@@ -35,6 +38,31 @@ def _load_registry_overrides() -> None:
 
 
 _load_registry_overrides()
+
+
+def load_dotenv(path: str | Path = ".env") -> list[str]:
+    """Load ``KEY=VALUE`` lines from a local ``.env`` into ``os.environ``.
+
+    Existing environment variables win, so an exported key is never clobbered.
+    Blank lines, ``#`` comments, an optional ``export`` prefix, and surrounding
+    quotes are handled. Returns the names that were set (never the values).
+    """
+    env_path = Path(path)
+    if not env_path.is_file():
+        return []
+    loaded: list[str] = []
+    for raw in env_path.read_text(encoding="utf-8-sig").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :]
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip().strip("'\"")
+        if key and key not in os.environ:
+            os.environ[key] = value
+            loaded.append(key)
+    return loaded
 
 
 def resolve_model(alias_or_model: str) -> str:

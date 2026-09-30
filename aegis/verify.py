@@ -85,12 +85,22 @@ class CrossEncoderNLI:
         if self._model is None:
             from sentence_transformers import CrossEncoder  # lazy
 
+            from aegis._models import cached_model
+
             cache_folder = str(self._data_dir / "models_cache")
-            try:
-                self._model = CrossEncoder(self.name, cache_folder=cache_folder)
-            except TypeError:
-                # Older sentence-transformers versions lack cache_folder.
-                self._model = CrossEncoder(self.name)
+
+            def _load():
+                from aegis._models import to_inference_precision
+
+                try:
+                    model = CrossEncoder(self.name, cache_folder=cache_folder)
+                except TypeError:
+                    # Older sentence-transformers versions lack cache_folder.
+                    model = CrossEncoder(self.name)
+                to_inference_precision(model.model)
+                return model
+
+            self._model = cached_model("nli", self.name, _load)
             id2label = self._model.model.config.id2label
             self._labels = [
                 self._canonical_label(id2label[i]) for i in range(len(id2label))
@@ -118,6 +128,30 @@ class CrossEncoderNLI:
         return results
 
 
+def _premise(text: str) -> str:
+    """Chunk text as NLI premise, minus the defense's spotlight delimiters.
+
+    The delimiters are prompt scaffolding; left in, they push the NLI model
+    toward "neutral" on premises that plainly entail the claim.
+    """
+    from aegis.defense import DATA_CLOSE, DATA_OPEN
+
+    return " ".join(text.replace(DATA_OPEN, " ").replace(DATA_CLOSE, " ").split())
+
+
+def _claim_forms(answer_text: str, question: str) -> list[str]:
+    """Hypotheses to test: the templated claim first, then a sentence answer as-is.
+
+    Short answers ("Dijon") need the question for context; a full-sentence
+    answer is already a claim, and wrapping it in the template garbles it.
+    """
+    text = answer_text.strip()
+    forms = [f"The answer to the question '{question}' is: {text.rstrip('.')}."]
+    if len(text.split()) >= 4:
+        forms.append(text if text.endswith((".", "!", "?")) else f"{text}.")
+    return forms
+
+
 def get_nli(config: AegisConfig | None = None) -> FakeNLI | CrossEncoderNLI:
     """Return the NLI model selected by ``config.nli_model``."""
     config = config or get_config()
@@ -133,37 +167,69 @@ class GroundednessVerifier:
         self.nli = nli
 
     def verify(
-        self, answer: Answer, retrieved: list[RetrievalResult], question: str
+        self,
+        answer: Answer,
+        retrieved: list[RetrievalResult],
+        question: str,
+        claims: list[str] | None = None,
     ) -> tuple[bool, list[VerifierReport]]:
         """Verify ``answer`` against the chunks it cites.
 
         Returns ``(grounded, reports)``. Abstentions, empty answers, and
         answers without citations are unverifiable and return ``(False, [])``.
         Citations whose chunk id is not among ``retrieved`` are skipped.
-        ``grounded`` is True iff at least one cited chunk entails the claim.
+        ``grounded`` is True iff a cited chunk, or the cited chunks together,
+        entail the claim.
+
+        ``claims`` are standalone factual sentences to check in place of the
+        built-in claim templates (the harness writes one with the model; see
+        ``HarnessedPipeline._node_verify``).
         """
         if answer.abstained or not answer.text.strip() or not answer.citations:
             return False, []
 
-        claim = f"The answer to the question '{question}' is: {answer.text}."
         by_id = {r.chunk.id: r.chunk for r in retrieved}
-
         chunk_ids = [c.chunk_id for c in answer.citations if c.chunk_id in by_id]
         if not chunk_ids:
             return False, []
-        pairs = [(by_id[chunk_id].text, claim) for chunk_id in chunk_ids]
 
+        hypotheses = [c for c in (claims or []) if c.strip()] or _claim_forms(
+            answer.text, question
+        )
+        reports = [
+            self._best_report(chunk_id, _premise(by_id[chunk_id].text), hypotheses)
+            for chunk_id in chunk_ids
+        ]
+        grounded = any(r.label == "entailment" for r in reports)
+
+        # Multi-hop answers are often entailed only by the cited chunks taken
+        # together (bridge fact in one, answer in another).
+        if not grounded and len(chunk_ids) > 1:
+            joined = " ".join(_premise(by_id[c].text) for c in chunk_ids)
+            combined = self._best_report("+".join(chunk_ids), joined, hypotheses)
+            reports.append(combined)
+            grounded = combined.label == "entailment"
+        return grounded, reports
+
+    def _best_report(
+        self, chunk_id: str, premise: str, hypotheses: list[str]
+    ) -> VerifierReport:
+        """NLI-judge one premise against each claim form; keep the best."""
+        pairs = [(premise, h) for h in hypotheses]
         if hasattr(self.nli, "predict_batch"):
             judgments = self.nli.predict_batch(pairs)
         else:
-            judgments = [self.nli.predict(premise, hyp) for premise, hyp in pairs]
-
-        reports = [
-            VerifierReport(claim=claim, chunk_id=chunk_id, label=label, score=score)
-            for chunk_id, (label, score) in zip(chunk_ids, judgments)
+            judgments = [self.nli.predict(p, h) for p, h in pairs]
+        entailed = [
+            (score, hyp)
+            for hyp, (label, score) in zip(hypotheses, judgments)
+            if label == "entailment"
         ]
-        grounded = any(r.label == "entailment" for r in reports)
-        return grounded, reports
+        if entailed:
+            score, hyp = max(entailed)
+            return VerifierReport(claim=hyp, chunk_id=chunk_id, label="entailment", score=score)
+        label, score = judgments[0]
+        return VerifierReport(claim=hypotheses[0], chunk_id=chunk_id, label=label, score=score)
 
     @staticmethod
     def contradiction_feedback(reports: list[VerifierReport]) -> str:

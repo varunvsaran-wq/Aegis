@@ -408,3 +408,43 @@ def test_score_results_no_judge_and_mismatch():
 
     with pytest.raises(KeyError):
         score_results([_query_result([], [], question_id="missing")], [q])
+
+
+# ---------------------------------------------------------------------------
+# Citation resolution: models abbreviate chunk ids.
+# ---------------------------------------------------------------------------
+
+
+def test_parse_contract_resolves_bare_indices_and_titles():
+    from aegis.pipeline import parse_contract
+
+    valid = ["Damon Stoudamire::60", "Terrence Jones::62", "Don Haskins::61"]
+    text = "ANSWER: Terrence Jones\nCITATIONS: 60, 62"
+    assert parse_contract(text, valid) == (
+        "Terrence Jones",
+        ["Damon Stoudamire::60", "Terrence Jones::62"],
+    )
+    assert parse_contract("ANSWER: x\nCITATIONS: Terrence Jones", valid)[1] == [
+        "Terrence Jones::62"
+    ]
+    assert parse_contract("ANSWER: x\nCITATIONS: terrence jones :: 62", valid)[1] == [
+        "Terrence Jones::62"
+    ]
+
+
+def test_parse_contract_still_drops_unknown_and_ambiguous():
+    from aegis.pipeline import parse_contract
+
+    valid = ["A::1", "B::1", "C::2"]
+    # "1" matches two chunks -> ambiguous -> dropped; "99" and "Z" unknown.
+    assert parse_contract("ANSWER: x\nCITATIONS: 1, 99, Z, 2", valid)[1] == ["C::2"]
+
+
+def test_parse_contract_ignores_markdown_emphasis():
+    from aegis.pipeline import parse_contract
+
+    text = "**ANSWER:** Tennis\n\n**CITATIONS:** 278, 277"
+    assert parse_contract(text, ["Angelique Kerber::278", "Justin Gimelstob::277"]) == (
+        "Tennis",
+        ["Angelique Kerber::278", "Justin Gimelstob::277"],
+    )

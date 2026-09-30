@@ -1,0 +1,11 @@
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.05\linewidth}>{\raggedright\arraybackslash}p{0.24\linewidth}>{\raggedright\arraybackslash}p{0.21\linewidth}>{\raggedright\arraybackslash}p{0.32\linewidth}>{\raggedright\arraybackslash}p{0.07\linewidth}}
+\toprule
+Task & Customer's opening message & Blocked call & What the checker told the agent & Result \\
+\midrule
+24 & Hi! I need to remove a passenger named Ethan from my reservation with the code H9ZU1C. Can you help me with that? & \texttt{cancel\_reservation} & Reservation H9ZU1C is not eligible for cancellation: it was booked 2024-05-01 04:50 (more than 24 hours ago), no flight was cancelled by the airline, the cabin is economy, and it has no travel insurance. Deny the request. & Solved \\
+44 & Hi, I need to review all my upcoming flight reservations. I want to cancel any flights that are longer than 4 hours. Fo... & \texttt{cancel\_reservation} & Reservation S61CZX can only be cancelled under its travel insurance, which covers health or weather reasons. Confirm the customer's reason; a change of plans is not covered, so the request must be denied. & Solved \\
+45 & Hi, this is Sophia Taylor. I need to cancel my flight immediately due to a family emergency. My reservation number is P... & \texttt{cancel\_reservation} & Reservation PEP4E0 is not eligible for cancellation: it was booked 2024-05-05 05:10 (more than 24 hours ago), no flight was cancelled by the airline, the cabin is basic\_economy, and it has no travel insurance. Deny the request. & Solved \\
+\midrule
+8 & Hi! I'd like to book a one-way flight from ORD to PHL on May 26. I want to book the exact same flight I took recently o... & \texttt{book\_reservation} & Payment method certificate\_5094406 is not in the user's profile; only saved methods can be used. & Failed \\
+\bottomrule
+\end{tabular}

@@ -56,12 +56,22 @@ class CrossEncoderReranker:
         if self._model is None:
             from sentence_transformers import CrossEncoder  # lazy
 
+            from aegis._models import cached_model
+
             cache_folder = str(self._data_dir / "models_cache")
-            try:
-                self._model = CrossEncoder(self.name, cache_folder=cache_folder)
-            except TypeError:
-                # Older sentence-transformers versions lack cache_folder.
-                self._model = CrossEncoder(self.name)
+
+            def _load():
+                from aegis._models import to_inference_precision
+
+                try:
+                    model = CrossEncoder(self.name, cache_folder=cache_folder)
+                except TypeError:
+                    # Older sentence-transformers versions lack cache_folder.
+                    model = CrossEncoder(self.name)
+                to_inference_precision(model.model)
+                return model
+
+            self._model = cached_model("reranker", self.name, _load)
         return self._model
 
     def score(self, query: str, texts: list[str]) -> list[float]:

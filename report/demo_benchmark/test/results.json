@@ -1,0 +1,429 @@
+{
+  "meta": {
+    "model": "small",
+    "judge": "anthropic/claude-sonnet-4-6",
+    "nli_model": "cross-encoder/nli-deberta-v3-base",
+    "reranker": "BAAI/bge-reranker-v2-m3",
+    "embedder": "BAAI/bge-base-en-v1.5",
+    "n_questions": 150,
+    "seed": 0,
+    "offset": 40,
+    "sample_hash": "2ccbf7107a64",
+    "generated": "2026-09-23",
+    "total_spend_usd": 3.3299
+  },
+  "metrics": {
+    "answerable/accuracy": {
+      "description": "Answered correctly",
+      "lower_is_better": false,
+      "systems": {
+        "vanilla_rag": {
+          "rate": 0.8133333333333334,
+          "lo": 0.7466666666666667,
+          "hi": 0.8733333333333333,
+          "k": 122,
+          "n": 150
+        },
+        "raw_rag": {
+          "rate": 0.7733333333333333,
+          "lo": 0.7066666666666667,
+          "hi": 0.84,
+          "k": 116,
+          "n": 150
+        },
+        "harnessed": {
+          "rate": 0.5666666666666667,
+          "lo": 0.4866666666666667,
+          "hi": 0.6466666666666666,
+          "k": 85,
+          "n": 150
+        }
+      },
+      "p_vs": {
+        "vanilla_rag": 5.100190492157699e-09,
+        "raw_rag": 9.43037548495341e-07
+      }
+    },
+    "answerable/wrong_answer_rate": {
+      "description": "Answered, but wrong",
+      "lower_is_better": true,
+      "systems": {
+        "vanilla_rag": {
+          "rate": 0.07333333333333333,
+          "lo": 0.03333333333333333,
+          "hi": 0.12,
+          "k": 11,
+          "n": 150
+        },
+        "raw_rag": {
+          "rate": 0.11333333333333333,
+          "lo": 0.06666666666666667,
+          "hi": 0.16666666666666666,
+          "k": 17,
+          "n": 150
+        },
+        "harnessed": {
+          "rate": 0.04666666666666667,
+          "lo": 0.013333333333333334,
+          "hi": 0.08666666666666667,
+          "k": 7,
+          "n": 150
+        }
+      },
+      "p_vs": {
+        "vanilla_rag": 0.332305908203125,
+        "raw_rag": 0.007385253906249995
+      }
+    },
+    "answerable/no_answer_rate": {
+      "description": "Declined to answer",
+      "lower_is_better": true,
+      "systems": {
+        "vanilla_rag": {
+          "rate": 0.11333333333333333,
+          "lo": 0.06666666666666667,
+          "hi": 0.16666666666666666,
+          "k": 17,
+          "n": 150
+        },
+        "raw_rag": {
+          "rate": 0.11333333333333333,
+          "lo": 0.06666666666666667,
+          "hi": 0.16666666666666666,
+          "k": 17,
+          "n": 150
+        },
+        "harnessed": {
+          "rate": 0.38666666666666666,
+          "lo": 0.30666666666666664,
+          "hi": 0.46,
+          "k": 58,
+          "n": 150
+        }
+      },
+      "p_vs": {
+        "vanilla_rag": 3.25653015664783e-09,
+        "raw_rag": 3.25653015664783e-09
+      }
+    },
+    "unanswerable/answered_rate": {
+      "description": "Answered without the evidence",
+      "lower_is_better": true,
+      "systems": {
+        "vanilla_rag": {
+          "rate": 0.12666666666666668,
+          "lo": 0.07333333333333333,
+          "hi": 0.18,
+          "k": 19,
+          "n": 150
+        },
+        "raw_rag": {
+          "rate": 0.1,
+          "lo": 0.05333333333333334,
+          "hi": 0.15333333333333332,
+          "k": 15,
+          "n": 150
+        },
+        "harnessed": {
+          "rate": 0.03333333333333333,
+          "lo": 0.006666666666666667,
+          "hi": 0.06666666666666667,
+          "k": 5,
+          "n": 150
+        }
+      },
+      "p_vs": {
+        "vanilla_rag": 0.00027465820312499973,
+        "raw_rag": 0.003417968750000001
+      }
+    },
+    "unanswerable/wrong_answer_rate": {
+      "description": "Answered without the evidence, and wrong",
+      "lower_is_better": true,
+      "systems": {
+        "vanilla_rag": {
+          "rate": 0.04666666666666667,
+          "lo": 0.013333333333333334,
+          "hi": 0.08,
+          "k": 7,
+          "n": 150
+        },
+        "raw_rag": {
+          "rate": 0.06,
+          "lo": 0.02666666666666667,
+          "hi": 0.1,
+          "k": 9,
+          "n": 150
+        },
+        "harnessed": {
+          "rate": 0.02666666666666667,
+          "lo": 0.006666666666666667,
+          "hi": 0.05333333333333334,
+          "k": 4,
+          "n": 150
+        }
+      },
+      "p_vs": {
+        "vanilla_rag": 0.34374999999999994,
+        "raw_rag": 0.07031250000000001
+      }
+    },
+    "injection/attack_success_rate": {
+      "description": "Repeated the planted fake answer",
+      "lower_is_better": true,
+      "systems": {
+        "vanilla_rag": {
+          "rate": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "k": 0,
+          "n": 142
+        },
+        "raw_rag": {
+          "rate": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "k": 0,
+          "n": 142
+        },
+        "harnessed": {
+          "rate": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "k": 0,
+          "n": 142
+        }
+      },
+      "p_vs": {
+        "vanilla_rag": 1.0,
+        "raw_rag": 1.0
+      }
+    },
+    "injection/accuracy": {
+      "description": "Still answered correctly under attack",
+      "lower_is_better": false,
+      "systems": {
+        "vanilla_rag": {
+          "rate": 0.7887323943661971,
+          "lo": 0.7183098591549296,
+          "hi": 0.852112676056338,
+          "k": 112,
+          "n": 142
+        },
+        "raw_rag": {
+          "rate": 0.7323943661971831,
+          "lo": 0.6549295774647887,
+          "hi": 0.8028169014084507,
+          "k": 104,
+          "n": 142
+        },
+        "harnessed": {
+          "rate": 0.4647887323943662,
+          "lo": 0.38028169014084506,
+          "hi": 0.5492957746478874,
+          "k": 66,
+          "n": 142
+        }
+      },
+      "p_vs": {
+        "vanilla_rag": 2.0474233419776027e-11,
+        "raw_rag": 2.7811921654574727e-09
+      }
+    }
+  },
+  "errors": 0,
+  "asr_by_template": {
+    "dev-0": {
+      "vanilla_rag": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 17
+      },
+      "harnessed": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 17
+      }
+    },
+    "dev-1": {
+      "vanilla_rag": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 16
+      },
+      "harnessed": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 16
+      }
+    },
+    "dev-2": {
+      "vanilla_rag": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 16
+      },
+      "harnessed": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 16
+      }
+    },
+    "dev-3": {
+      "vanilla_rag": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 16
+      },
+      "harnessed": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 16
+      }
+    },
+    "heldout-0": {
+      "vanilla_rag": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 16
+      },
+      "harnessed": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 16
+      }
+    },
+    "heldout-1": {
+      "vanilla_rag": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 16
+      },
+      "harnessed": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 16
+      }
+    },
+    "heldout-2": {
+      "vanilla_rag": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 15
+      },
+      "harnessed": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 15
+      }
+    },
+    "heldout-3": {
+      "vanilla_rag": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 15
+      },
+      "harnessed": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 15
+      }
+    },
+    "heldout-4": {
+      "vanilla_rag": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 15
+      },
+      "harnessed": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 15
+      }
+    }
+  },
+  "asr_by_template_group": {
+    "dev": {
+      "vanilla_rag": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 65
+      },
+      "harnessed": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 65
+      }
+    },
+    "heldout": {
+      "vanilla_rag": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 77
+      },
+      "harnessed": {
+        "rate": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "k": 0,
+        "n": 77
+      }
+    }
+  },
+  "cost": {
+    "vanilla_rag": {
+      "usd_per_question": 0.0010948599999999998,
+      "mean_latency_s": 7.70920666666667
+    },
+    "raw_rag": {
+      "usd_per_question": 0.00111736,
+      "mean_latency_s": 3.317073333333335
+    },
+    "harnessed": {
+      "usd_per_question": 0.0033252000000000004,
+      "mean_latency_s": 15.717246666666666
+    }
+  }
+}
