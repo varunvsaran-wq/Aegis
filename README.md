@@ -10,16 +10,17 @@ with confidence intervals and paired tests.
 
 | Report | Question | Headline |
 |---|---|---|
-| [**Fast decisions, cheap guards**](jev_study/report/jev_report.pdf) (Sep 2026, 8 pp.) | Can a fast "System One" decision model (Jev) replace an LLM judge for prompt-injection screening and model routing? | Injection AUROC 0.994 vs 0.980 for a Claude Haiku 4.5 judge, at 4× the speed and 1/18 the cost; routing no better than random |
-| [**Checking a support agent's actions in code**](cs_harness/report/cs_report.pdf) (Sep 2026, 6 pp.) | Does a policy-as-code gate make a cheap model a reliable airline support agent? | GPT-4o-mini solves 43.8% of tasks with the gate vs 26.2% without, level with a stronger model |
-| [**Aegis: does a reliability harness make a cheap model safer for question answering?**](report/demo/aegis_report.pdf) (first version, 7 pp.) | Does a verify-and-abstain harness make RAG answers trustworthy? | Fewer unsupported answers (12.7% → 3.3%), but 39% of answerable questions declined |
+| [**Fast decisions, cheap guards**](Jev_Study_Report.pdf) (Sep 2026, 8 pp.) | Can a fast "System One" decision model (Jev) replace an LLM judge for prompt-injection screening and model routing? | Injection AUROC 0.994 vs 0.980 for a Claude Haiku 4.5 judge, at 4× the speed and 1/18 the cost; routing no better than random |
+| [**Checking a support agent's actions in code**](Customer_Service_Harness_Report.pdf) (Sep 2026, 6 pp.) | Does a policy-as-code gate make a cheap model a reliable airline support agent? | GPT-4o-mini solves 43.8% of tasks with the gate vs 26.2% without, level with a stronger model |
+| [**Aegis: does a reliability harness make a cheap model safer for question answering?**](Retrieval_QA_Harness_Report.pdf) (first version, 7 pp.) | Does a verify-and-abstain harness make RAG answers trustworthy? | Fewer unsupported answers (12.7% → 3.3%), but 39% of answerable questions declined |
 
 Each report's numbers, tables and figures are generated from committed results, so they
-can be rebuilt without calling any model.
+can be rebuilt without calling any model. The PDFs here are copies of the ones built in
+`jev_study/report/`, `cs_harness/report/` and `report/demo/`; copy them up again after a rebuild.
 
 ## 1. Customer-service harness
 
-[`cs_harness/`](cs_harness/) · report: [`cs_harness/report/cs_report.pdf`](cs_harness/report/cs_report.pdf)
+[`cs_harness/`](cs_harness/) · report: [`Customer_Service_Harness_Report.pdf`](Customer_Service_Harness_Report.pdf)
 
 An airline support agent on [tau2-bench](https://github.com/sierra-research/tau2-bench),
 where an AI plays the customer and a task only counts if the booking database ends up
@@ -44,7 +45,7 @@ frozen before the test run: [`cs_harness/PROTOCOL.md`](cs_harness/PROTOCOL.md).
 
 ## 2. Jev study: fast models as guards
 
-[`jev_study/`](jev_study/) · report: [`jev_study/report/jev_report.pdf`](jev_study/report/jev_report.pdf)
+[`jev_study/`](jev_study/) · report: [`Jev_Study_Report.pdf`](Jev_Study_Report.pdf)
 
 An independent test of Jev (TypeSafe AI's "System One" model, `jev-1.13.0`), which answers
 multiple-choice and rating questions about a text in about 140 ms instead of generating
@@ -69,7 +70,7 @@ prompts (0.677). The whole study cost $0.69. Protocol: [`jev_study/PROTOCOL.md`]
 
 ## 3. Retrieval QA harness (first version)
 
-[`aegis/`](aegis/) · report: [`report/demo/aegis_report.pdf`](report/demo/aegis_report.pdf)
+[`aegis/`](aegis/) · report: [`Retrieval_QA_Harness_Report.pdf`](Retrieval_QA_Harness_Report.pdf)
 
 A RAG pipeline on HotpotQA (hybrid BM25 + dense retrieval, cross-encoder reranking) with a
 query structurer, prompt-injection defense, a citation contract, and an NLI verifier that
