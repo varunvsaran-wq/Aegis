@@ -1,0 +1,11 @@
+\begin{tabular}{lcccc}
+\toprule
+Router & AIQ & \makecell{AUROC\\(GPT-4 wins)} & \makecell{Quality at\\40\% to GPT-4} & \makecell{\$ per 1k prompts to\\reach 95\% of GPT-4} \\
+\midrule
+Random & 0.641 & 0.500 & -- & -- \\
+Jev (choice question) & 0.641 & 0.554 & 0.628 & 3.66 \\
+TF-IDF router trained on dev & 0.677 & 0.686 & 0.673 & 1.99 \\
+Prompt length & 0.650 & 0.486 & 0.611 & 3.47 \\
+Oracle (knows the answers) & 0.761 & -- & 0.778 & 0.65 \\
+\bottomrule
+\end{tabular}

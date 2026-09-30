@@ -1,0 +1,279 @@
+{
+  "price_per_m_input": 0.042,
+  "models": [
+    {
+      "name": "jev-latest",
+      "description": "The latest iteration of TypeSafe's System One Model: Jev",
+      "release_date": "2026-09-10T18:38:01.391457+00:00"
+    },
+    {
+      "name": "jev-preview",
+      "description": "A preview version of `jev-latest`: should be better in most ways",
+      "release_date": "2026-09-10T18:39:06.057655+00:00"
+    }
+  ],
+  "choice": [
+    {
+      "kind": "benign",
+      "variant": "v1",
+      "score": 0.0,
+      "latency_ms": 127.35640001483262,
+      "cost_usd": 1.7052e-05,
+      "confidence": 1.0,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 406,
+      "error": "",
+      "extra": {
+        "choice": "benign",
+        "probabilities": {
+          "benign": 1.0,
+          "injection": 0.0
+        }
+      }
+    },
+    {
+      "kind": "benign",
+      "variant": "v2",
+      "score": 0.0,
+      "latency_ms": 120.02780009061098,
+      "cost_usd": 1.6968e-05,
+      "confidence": 1.0,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 404,
+      "error": "",
+      "extra": {
+        "choice": "normal",
+        "probabilities": {
+          "normal": 1.0,
+          "hijack": 0.0
+        }
+      }
+    },
+    {
+      "kind": "benign-trigger",
+      "variant": "v1",
+      "score": 0.0,
+      "latency_ms": 177.4616000475362,
+      "cost_usd": 1.7052e-05,
+      "confidence": 1.0,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 406,
+      "error": "",
+      "extra": {
+        "choice": "benign",
+        "probabilities": {
+          "benign": 1.0,
+          "injection": 0.0
+        }
+      }
+    },
+    {
+      "kind": "benign-trigger",
+      "variant": "v2",
+      "score": 0.0,
+      "latency_ms": 164.26790005061775,
+      "cost_usd": 1.6968e-05,
+      "confidence": 1.0,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 404,
+      "error": "",
+      "extra": {
+        "choice": "normal",
+        "probabilities": {
+          "normal": 1.0,
+          "hijack": 0.0
+        }
+      }
+    },
+    {
+      "kind": "injection",
+      "variant": "v1",
+      "score": 1.0,
+      "latency_ms": 146.2036999873817,
+      "cost_usd": 1.7136000000000003e-05,
+      "confidence": 1.0,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 408,
+      "error": "",
+      "extra": {
+        "choice": "injection",
+        "probabilities": {
+          "benign": 0.0,
+          "injection": 1.0
+        }
+      }
+    },
+    {
+      "kind": "injection",
+      "variant": "v2",
+      "score": 1.0,
+      "latency_ms": 117.41599999368191,
+      "cost_usd": 1.7052e-05,
+      "confidence": 1.0,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 406,
+      "error": "",
+      "extra": {
+        "choice": "hijack",
+        "probabilities": {
+          "hijack": 1.0,
+          "normal": 0.0
+        }
+      }
+    },
+    {
+      "kind": "indirect",
+      "variant": "v1",
+      "score": 1.0,
+      "latency_ms": 115.61460001394153,
+      "cost_usd": 1.827e-05,
+      "confidence": 1.0,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 435,
+      "error": "",
+      "extra": {
+        "choice": "injection",
+        "probabilities": {
+          "benign": 0.0,
+          "injection": 1.0
+        }
+      }
+    },
+    {
+      "kind": "indirect",
+      "variant": "v2",
+      "score": 1.0,
+      "latency_ms": 133.0464999191463,
+      "cost_usd": 1.8186e-05,
+      "confidence": 1.0,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 433,
+      "error": "",
+      "extra": {
+        "choice": "hijack",
+        "probabilities": {
+          "normal": 0.0,
+          "hijack": 1.0
+        }
+      }
+    },
+    {
+      "kind": "routing-easy",
+      "variant": "v1",
+      "score": 0.0,
+      "latency_ms": 133.7995999492705,
+      "cost_usd": 1.6716e-05,
+      "confidence": 1.0,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 398,
+      "error": "",
+      "extra": {
+        "choice": "small_ok",
+        "probabilities": {
+          "small_ok": 1.0,
+          "needs_strong": 0.0
+        }
+      }
+    },
+    {
+      "kind": "routing-easy",
+      "variant": "v2",
+      "score": 0.0,
+      "latency_ms": 121.76110001746565,
+      "cost_usd": 1.4238000000000002e-05,
+      "confidence": 1.0,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 339,
+      "error": "",
+      "extra": {
+        "choice": "easy",
+        "probabilities": {
+          "hard": 0.0,
+          "easy": 1.0
+        }
+      }
+    },
+    {
+      "kind": "routing-hard",
+      "variant": "v1",
+      "score": 0.09,
+      "latency_ms": 120.25559996254742,
+      "cost_usd": 1.7514e-05,
+      "confidence": 0.82,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 417,
+      "error": "",
+      "extra": {
+        "choice": "small_ok",
+        "probabilities": {
+          "small_ok": 0.91,
+          "needs_strong": 0.09
+        }
+      }
+    },
+    {
+      "kind": "routing-hard",
+      "variant": "v2",
+      "score": 0.02,
+      "latency_ms": 136.04360003955662,
+      "cost_usd": 1.5036000000000001e-05,
+      "confidence": 0.97,
+      "model_version": "jev-1.13.0",
+      "input_tokens": 358,
+      "error": "",
+      "extra": {
+        "choice": "easy",
+        "probabilities": {
+          "easy": 0.98,
+          "hard": 0.02
+        }
+      }
+    }
+  ],
+  "raw": {
+    "noul": {
+      "latency_ms": 131.02039997465909,
+      "model": "jev-1.13.0",
+      "usage": {
+        "input_tokens": 290,
+        "output_tokens": 20
+      },
+      "answer": {
+        "type": "noul",
+        "noul": 0.97
+      }
+    },
+    "score": {
+      "latency_ms": 160.55249993223697,
+      "model": "jev-1.13.0",
+      "usage": {
+        "input_tokens": 330,
+        "output_tokens": 17
+      },
+      "answer": {
+        "type": "score",
+        "score": 2.99,
+        "confidence": 0.99,
+        "legend": {
+          "0": "not at all",
+          "1": "slightly",
+          "2": "clearly",
+          "3": "blatantly"
+        },
+        "probabilities": {
+          "0": 0.0,
+          "1": 0.0,
+          "2": 0.01,
+          "3": 0.99
+        }
+      }
+    }
+  },
+  "latency_ms": {
+    "p50": 134.92159999441355,
+    "p95": 177.4616000475362,
+    "n": 20
+  },
+  "rate_limited_in_burst": 0,
+  "total_cost_usd": 0.000202188
+}

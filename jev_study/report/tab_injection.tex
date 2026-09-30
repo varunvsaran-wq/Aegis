@@ -1,0 +1,12 @@
+\begin{tabular}{lcccccc}
+\toprule
+System & AUROC [95\% CI] & \makecell{Detected\\(5\% FPR thr.)} & \makecell{NotInject\\false alarms} & ECE & \makecell{p50 / p95\\ms} & \makecell{\$ per\\1k checks} \\
+\midrule
+Jev (score question) & 0.994 [0.991, 0.997] & 97.8\% & 1.6\% & 0.145 & 138 / 200 & 0.019 \\
+Jev (choice question) & 0.981 [0.970, 0.991] & 96.6\% & 0.4\% & 0.143 & 136 / 206 & 0.019 \\
+Claude Haiku 4.5 judge & 0.980 [0.972, 0.987] & 87.6\% & 2.5\% & 0.105 & 556 / 827 & 0.344 \\
+GPT-4o-mini judge & 0.842 [0.815, 0.869] & 69.9\% & 2.9\% & 0.192 & 1188 / 2280 & 0.038 \\
+ProtectAI DeBERTa (local) & 0.809 [0.778, 0.838] & 41.9\% & 44.0\% & 0.327 & 22 / 44 & 0 (local) \\
+Keyword rules & 0.528 [0.516, 0.542] & 5.6\% & 0.0\% & 0.426 & 0 / 0 & 0 (local) \\
+\bottomrule
+\end{tabular}

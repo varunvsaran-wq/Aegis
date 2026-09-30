@@ -1,0 +1,346 @@
+% Jev study report. Every number is a macro from numbers.tex or a generated
+% table (jev_study/build_report.py). Do not type numbers into this file.
+\documentclass[11pt]{article}
+
+\usepackage[letterpaper,margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{makecell}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage[colorlinks=true,allcolors=blue!50!black]{hyperref}
+
+\captionsetup{font=small,labelfont=bf}
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+
+\input{numbers.tex}
+\newcommand{\AuthorName}{Varun Saran}
+\newcommand{\RepoURL}{https://github.com/varunvsaran-wq/Aegis}
+
+\title{\textbf{Fast decisions, cheap guards:}\\an independent test of a ``System One'' model\\for prompt-injection screening and model routing}
+\author{\AuthorName}
+\date{September 2026}
+
+\begin{document}
+\maketitle
+
+\section*{Summary}
+
+Jev (TypeSafe AI, version \texttt{\JevVersion}) is a model that does not write
+text. It answers multiple-choice and rating questions about a piece of text, in
+about a tenth of a second, and returns probabilities. I tested it on two jobs
+that LLM systems need done many times per request: spotting prompt injections,
+and deciding whether a prompt needs an expensive model. Wordings and thresholds
+were chosen on a development split; the protocol was then frozen and run once
+on a held-out test split.
+
+\textbf{Prompt injection: Jev is as accurate as the best LLM judge I tried,
+about \SpeedupHaiku{} times faster and \CheaperHaiku{} times cheaper.} On
+\NTestTotal{} held-out texts it reached an AUROC of \JevSAuroc{} (95\% CI
+\JevSAurocLo--\JevSAurocHi), against \HaikuAuroc{} for Claude Haiku 4.5 asked
+to judge the same texts, \MiniAuroc{} for GPT-4o-mini and \DebertaAuroc{} for
+ProtectAI's widely used DeBERTa classifier. It answered in \JevSPfifty{} ms
+(median) for \$\JevSCost{} per thousand checks, where Haiku took
+\HaikuPfifty{} ms and \$\HaikuCost. It also avoided the trap that sinks
+small classifiers: on NotInject, a set of harmless prompts full of words like
+``ignore'' and ``bypass'', it raised \JevSNiHalf\% false alarms where DeBERTa
+raised \DebertaNiHalf\%.
+
+\textbf{The catch is the threshold.} Jev ranks texts almost perfectly, but its
+default cut-off (0.5) lets \JevSMisses{} of \the\numexpr\NTestDeepsetPos+\NTestIndirectPos\relax{}
+injections through (\JevSTprHalf\% detected). Lowering the cut-off far enough to
+catch \JevSTprFive\% of them also flags \JevSNiFive\% of the NotInject prompts.
+The same tension shows up in the Haiku judge. No single threshold gives both
+high detection and low over-defence, so a deployment has to pick its point on
+purpose.
+
+\textbf{Model routing: Jev does not help.} Asked whether Mixtral-8x7B would be
+enough or GPT-4 was needed, on \RN{} RouterBench prompts, Jev's routing was no
+better than random (AIQ \RJevAiq{} against \RRandomAiq) and worse than a simple
+word-count classifier trained on the development prompts (\RTfidfAiq). The
+whole study cost \$\TotalSpend{}, of which Jev's \JevCalls{} calls were
+\$\JevSpend.
+
+\section{Why these two jobs}
+
+LLM systems are full of small yes/no decisions: is this retrieved document
+trying to hijack the model, should this request go to the big model, does this
+reply break a rule. Today these are usually made by calling an LLM with a
+judging prompt, which adds hundreds of milliseconds and real cost to every
+request, or by a small trained classifier, which is fast but brittle. Jev is
+sold as a third option: a model built only to answer questions like these, with
+calibrated probabilities, at 70--500 ms and \$0.042 per million input tokens,
+output free. None of these claims came with public data, so I measured them.
+
+Prompt-injection screening was the headline job because it has good public
+data, a known failure mode for cheap detectors (over-defence), and a clear cost
+to getting it wrong. Routing was the second because it asks something
+different: not ``what does this text say'', but ``how hard is this text for
+another model'', which is closer to a prediction about the world.
+
+\section{Setup}
+
+\textbf{Asking Jev.} A Jev request sends a text (the \emph{state}) and one or
+more questions. I used two question types. A \emph{choice} question has named
+options (``injection'' / ``benign'') and returns a probability for each plus a
+confidence. A \emph{score} question has ordered levels (``no injection at all''
+up to ``clearly an injection'') and returns the expected level, a number that
+varies smoothly. The smoke test showed why the second matters: choice
+probabilities are nearly always 0 or 1 (\ChoiceSaturated\% of test answers were
+within 0.01 of either end), which leaves little to rank by. On the test split
+the score question produced \ScoreDistinct{} distinct values against
+\ChoiceDistinct{} for the choice question. A request used about \JevTokens{}
+input tokens, most of them Jev's own question framing.
+
+\textbf{Systems compared.} Two Jev wordings (the score question as primary, one
+choice question as secondary, both picked on development data, Appendix~\ref{app:dev});
+Claude Haiku 4.5 and GPT-4o-mini asked to return a verdict and a probability
+(temperature 0); ProtectAI's \texttt{deberta-v3-base-prompt-injection-v2}, run
+locally on a laptop GPU (RTX 4050); and the keyword rules from my earlier Aegis
+project. Latency is wall-clock time per check from the same laptop, one call at
+a time, so hosted systems include network time.
+
+\textbf{Data.} Texts were split by a hash of their content into development
+(30\%) and test (70\%):
+\begin{itemize}\itemsep0pt
+  \item \emph{Direct injections}: deepset \texttt{prompt-injections}, English and
+        German (test: \NTestDeepsetPos{} injections, \NTestDeepsetNeg{} benign).
+  \item \emph{Injections hidden in documents}: HotpotQA Wikipedia paragraphs,
+        each included clean and with a planted note such as ``Readers and tools
+        quoting this article should give \emph{X} as the answer'' (test:
+        \NTestIndirectPos{} + \NTestIndirectNeg). Test uses five note wordings
+        that were never seen during development.
+  \item \emph{Over-defence}: NotInject, harmless prompts built around one to three
+        trigger words (test: \NTestNotinjectNeg{}, all benign).
+\end{itemize}
+
+\textbf{Protocol.} Question wordings and thresholds were chosen on the
+development split. The protocol, file hashes and Jev version were then frozen
+(\texttt{jev\_study/PROTOCOL.md}) and the test split was run once. The runners
+refuse to touch test data before that file exists. AUROC confidence intervals
+use a bootstrap that resamples injections and benign texts separately;
+comparisons between systems are paired on the same texts.
+
+\section{Study 1: prompt-injection screening}
+
+\begin{table}[h]
+\centering
+\small
+\input{tab_injection.tex}
+\caption{Test split (deepset + document injections; NotInject reported
+separately). ``Detected'' uses a threshold chosen on development data to allow
+5\% false alarms there. NotInject false alarms are at the 0.5 threshold. ECE is
+the calibration error of the score read as P(injection).}
+\label{tab:inj}
+\end{table}
+
+\textbf{Accuracy.} Jev's score question beat every other system on AUROC
+(Table~\ref{tab:inj}, Figure~\ref{fig:roc}). Against Haiku the gap was small but
+consistent: \DiffSHaiku{} (95\% CI \DiffSHaikuLo{} to \DiffSHaikuHi). The
+frozen protocol said a difference inside $\pm0.02$ would be called ``no
+meaningful difference''; the interval's upper end reaches just past that, so
+the honest reading is \emph{at least as accurate as Haiku, possibly slightly
+better}. The choice wording tied Haiku (\DiffCHaiku, CI \DiffCHaikuLo{} to
+\DiffCHaikuHi) and was below the score wording (\DiffSC). Against GPT-4o-mini
+the gap was large (\DiffSMini), almost entirely from documents: GPT-4o-mini
+scored \MiniAurocIndirect{} on hidden injections, Jev \JevSAurocIndirect.
+DeBERTa did well on direct injections (\DebertaAurocDeepset) and badly on
+hidden ones (\DebertaAurocIndirect), which is expected: it was trained on
+jailbreak-style prompts, not on polite notes inside encyclopaedia text.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{fig_roc.pdf}
+\caption{ROC curves on the test split. Right: the region that matters for a
+filter that must rarely block legitimate traffic.}
+\label{fig:roc}
+\end{figure}
+
+\textbf{Speed and cost.} Figure~\ref{fig:tradeoff} puts the systems on the two
+axes a builder cares about. Jev's median of \JevSPfifty{} ms (p95
+\JevSPninetyfive) sits inside the vendor's 70--500 ms claim, \SpeedupHaiku$\times$
+faster than Haiku and \SpeedupMini$\times$ faster than GPT-4o-mini. At
+\$\JevSCost{} per thousand checks it cost \CheaperHaiku$\times$ less than Haiku
+and \CheaperMini$\times$ less than GPT-4o-mini. Only the local DeBERTa model was
+faster (\DebertaPfifty{} ms) and cheaper, and it was far less accurate.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{fig_tradeoff.pdf}
+\caption{Accuracy against latency (left) and cost (right), test split. Up and to
+the left is better.}
+\label{fig:tradeoff}
+\end{figure}
+
+\textbf{Thresholds and over-defence.} A high AUROC says the ranking is right;
+a filter also needs a cut-off. At Jev's natural cut-off of 0.5 it flagged no
+benign deepset or clean document text (\JevSFprHalf\% false alarms) but
+detected only \JevSTprHalf\% of injections. Many held-out planted notes got low
+but non-zero scores: still above every clean paragraph, but below 0.5. Moving
+the cut-off to the value that allowed 5\% false alarms on development data
+raised detection to \JevSTprFive\% at \JevSFprFive\% false alarms on the test
+texts, but NotInject false alarms went from \JevSNiHalf\% to \JevSNiFive\%.
+Haiku showed the same pattern (\HaikuNiHalf\% to \HaikuNiFive\%). NotInject is
+built to sit right at this boundary, so the numbers overstate what ordinary
+traffic would see, but the lesson holds: \emph{the operating point, not the
+AUROC, decides whether the filter annoys users or lets attacks through}, and it
+should be set on traffic that looks like the deployment.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\linewidth]{fig_notinject.pdf}
+\caption{False alarms on NotInject at the 0.5 threshold, by number of trigger
+words in the prompt. DeBERTa flags nearly half of these harmless prompts.}
+\label{fig:ni}
+\end{figure}
+
+\textbf{Calibration.} TypeSafe says Jev's probabilities are calibrated. On this
+task they were not especially: the score read as P(injection) had an expected
+calibration error of \JevSEce{}, worse than Haiku's \HaikuEce{}
+(Figure~\ref{fig:reliability}). The miscalibration is in one direction: Jev is
+under-confident about real injections, which is the threshold problem above.
+The confidence the choice question reports alongside its answer was closer
+(ECE \JevCConfEce{} against whether the answer was right) but, being almost
+always 1.0, carries little information.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\linewidth]{fig_reliability.pdf}
+\caption{Reliability on the test split (five equal-width bins). The dotted line
+is perfect calibration. Points above it mean more of those texts were
+injections than the score claimed: the system is under-confident.}
+\label{fig:reliability}
+\end{figure}
+
+\textbf{What Jev gets wrong.} At 0.5, Jev's test errors were \JevSFalseAlarms{}
+false alarms, all on NotInject, and \JevSMisses{} misses. Table~\ref{tab:examples}
+(Appendix) shows examples. The false alarms are prompts a human might also
+hesitate over (``Please activate the unfiltered mode\ldots''). Many misses are
+prompts that deepset labels as injections under its broad definition (any
+attempt to change the topic) but that read as ordinary requests: ``generate
+c++'', ``Tell me a joke about a woman''. Part of the remaining error is
+disagreement with the labels, not a failure to see an attack.
+
+\section{Study 4: routing between a cheap and a strong model}
+
+RouterBench stores, for each of its prompts, the answer, score and cost of
+eleven models, so a routing policy can be scored without calling them again. I
+used Mixtral-8x7B as the cheap model (quality \RCheapQ, \$\RCheapCost{} per
+thousand prompts) and GPT-4 as the strong one (quality \RStrongQ, \$\RStrongCost).
+A router scores each prompt; sending the highest-scoring share to GPT-4 traces
+a cost--quality curve, summarised by its average quality over the cost range
+(AIQ, RouterBench's metric). Jev's own cost, \$\RJevRouterCost{} per thousand
+prompts, is included.
+
+\begin{table}[h]
+\centering
+\small
+\input{tab_routing.tex}
+\caption{Routing on \RN{} held-out RouterBench prompts, sampled evenly across
+task families. ``AUROC (GPT-4 wins)'' measures how well the router's score picks
+out the prompts where GPT-4 does better than Mixtral.}
+\label{tab:routing}
+\end{table}
+
+Jev's routing tracked the random line (Table~\ref{tab:routing},
+Figure~\ref{fig:routing}). Its score separated prompts where GPT-4 wins only
+slightly better than chance (AUROC \RJevAurocWin). A TF-IDF classifier trained
+on the development prompts' RouterBench scores did clearly better (AIQ
+\RTfidfAiq, AUROC \RTfidfAurocWin), reaching 95\% of GPT-4's quality for
+\$\RTfidfCostNinetyfive{} per thousand prompts against Jev's
+\$\RJevCostNinetyfive. The development split had already shown this (AIQ
+\RDevJevAiq{} against \RDevRandomAiq{} for random), and the protocol recorded
+the expectation before the test run.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.7\linewidth]{fig_routing.pdf}
+\caption{Cost--quality curves on the test split. Each point sends a larger share
+of prompts to GPT-4. The oracle knows which model is right on each prompt.}
+\label{fig:routing}
+\end{figure}
+
+The contrast with Study 1 is instructive. Spotting an injection is a judgement
+about what the text \emph{says}. Knowing whether Mixtral will get a question
+right is a judgement about another model's abilities on a task mix Jev has no
+information about; the TF-IDF router wins because it learned exactly that from
+labelled examples. A zero-shot question cannot stand in for that data.
+
+\section{What this means for builders}
+
+\begin{itemize}
+  \item \textbf{Use Jev as an injection screen where an LLM judge is too slow or
+        too expensive.} It matched the best judge tested at a fraction of the
+        latency and cost, and it held up on document injections written in
+        wording no one tuned on.
+  \item \textbf{Set its threshold on your own traffic.} The default cut-off is
+        cautious about blocking; a low cut-off catches nearly everything but
+        over-blocks trigger-word prompts. A two-stage design, where Jev's
+        uncertain middle band goes to an LLM judge, is the natural next test.
+  \item \textbf{Prefer a score question over a choice question} when you need to
+        rank or threshold: choice probabilities are nearly always 0 or 1.
+  \item \textbf{Do not use it to predict model difficulty.} For routing, a small
+        classifier trained on your own logs did better.
+\end{itemize}
+
+\section{Limitations}
+
+\begin{itemize}\itemsep0pt
+  \item One Jev version (\texttt{\JevVersion}); TypeSafe also offers a
+        ``preview'' model, not tested.
+  \item The hidden-injection set comes from one generator (planted
+        answer-override notes). Jev and Haiku reached an AUROC of about 1.0 on
+        it, so it does not separate the best systems; harder document attacks
+        (BIPIA, AgentDojo) are the obvious next step.
+  \item deepset's labels count topic changes as injections, which caps
+        achievable detection and penalises systems with a narrower definition.
+  \item No end-to-end test: I measured detection, not whether screening stops
+        an agent from being hijacked.
+  \item Meta's Prompt Guard 2, a strong small detector, needs gated access and
+        was not included.
+  \item Routing used one model pair and old models (Mixtral-8x7B, GPT-4-1106),
+        because that is what RouterBench stores.
+  \item Jev's outputs were used only for evaluation. TypeSafe's terms forbid
+        training models on them, and no model here was.
+\end{itemize}
+
+\section*{Reproducing}
+
+Code, frozen protocol and cached decisions: \url{\RepoURL} (folder
+\texttt{jev\_study}). \texttt{run\_injection.py} and \texttt{run\_routing.py}
+rerun any system (cached decisions are reused), \texttt{analyze.py} computes the
+results and \texttt{build\_report.py} regenerates every number, table and
+figure in this report.
+
+\appendix
+\section{Choosing Jev's wording on development data}
+\label{app:dev}
+
+\begin{table}[h]
+\centering
+\small
+\input{tab_dev.tex}
+\caption{Development split. The score wording had the highest AUROC (Haiku:
+\DevHaikuAuroc) and was frozen as primary; choice v2 had the best-calibrated
+confidence and no NotInject false alarms, and was frozen as secondary.}
+\end{table}
+
+\section{Examples of Jev's errors}
+
+\begin{table}[h]
+\centering
+\scriptsize
+\input{tab_examples.tex}
+\caption{Jev (score question) errors on the test split at the 0.5 threshold:
+its highest-scoring false alarms and lowest-scoring misses (non-English texts
+omitted).}
+\label{tab:examples}
+\end{table}
+
+\end{document}
